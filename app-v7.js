@@ -3,6 +3,9 @@
 const E=root.MoneyTrackerEngine;
 if(!E)throw Error('Motor financeiro não carregado');
 let S=E.newState(),auth=false,busy=false,saveError=false,toastTimeout;
+let analysis=null,analysisOwner=null,analysisState=null;
+function invalidateAnalysis(){analysis=null;analysisOwner=null;analysisState=null;}
+function analyzeNow(){const result={issues:E.gaps(S,ui.owner),gains:E.gains(S,ui.owner,'all'),portfolio:E.portfolio(S,ui.owner)};analysis=result;analysisOwner=ui.owner;analysisState=S;return result;}
 const ui={page:'home',owner:'family',importOwner:'me',period:'all',category:'all',search:'',assetKey:null,historyKind:'all',historyLimit:70,importMessage:''};
 const NAV=[['home','⌂','Início'],['portfolio','▤','Carteira'],['profit','↗','Lucro'],['import','⇧','Importar'],['needs','☑','Pendências']];
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -134,7 +137,7 @@ function evolutionChart(owner){
 }
 function home(){
  const p=E.portfolio(S,ui.owner),g=E.gains(S,ui.owner,ui.period);
- const needs=E.gaps(S,ui.owner).filter(i=>i.level==='critical');
+ // Pendências verificadas somente quando solicitadas.
  return '<section class="mt7-hero"><small>Capital investido · posição da '+(ui.owner==='family'?'família':'carteira')+'</small><h2>'+money(p.total)+'</h2>'+
  '<div class="mt7-herometa"><span>'+p.holdings.length+' posições</span><span>'+S.records.filter(r=>ui.owner==='family'||r.owner===ui.owner).length+' registros</span>'+
  '<span>'+(p.valuation==='mixed'?'Consolidado indicativo':p.valuation==='historical'?'Custo histórico':'Posição B3')+'</span></div>'+
@@ -145,7 +148,7 @@ function home(){
  card(titlebar('Principais posições','portfolio')+holdingsRows(p,5))+'</div>'+
  card(titlebar('Evolução patrimonial','profit')+evolutionChart(ui.owner))+
  card(titlebar('Evolução do resultado','profit')+monthlyChart(g))+
- (needs.length?'<div class="mt7-note warning"><strong>'+needs.length+' pendência(s) importante(s) para conferir seus dados.</strong> O aplicativo mostra exatamente o que buscar na B3. <button data-nav="needs">Ver pendências ›</button></div>':'')+
+ '<div class="mt7-actionrow"><button type="button" class="mt7-btn secondary" data-nav="needs">Analisar pendências</button></div>'+
  '<div class="mt7-actionrow"><button class="mt7-btn" data-nav="import">Importar B3</button><button class="mt7-btn secondary" data-nav="income">Proventos</button><button class="mt7-btn ghost" data-nav="insights">Análises</button></div>';
 }
 function portfolio(){
@@ -320,11 +323,14 @@ function pendingSalesDetails(){
 }
 
 function needs(){
- const p=E.portfolio(S,ui.owner),issues=E.gaps(S,ui.owner);
- return reconciliationCard(true)+pendingSalesDetails()+card(titlebar('Diagnóstico: operações e valores de mercado')+
+ const report=analysis&&analysisOwner===ui.owner&&analysisState===S?analysis:analyzeNow();
+ const p=report.portfolio,issues=report.issues,g=report.gains;
+ return card(titlebar('Análise atual dos dados')+
+ '<p>Diagnóstico recalculado a partir dos registros atuais; nenhum resultado é salvo como pendência fixa.</p><button type="button" class="mt7-btn secondary" data-action="analyze">Analisar agora</button>')+
+ card(titlebar('Diagnóstico: operações e valores de mercado')+
  '<p>Diagnóstico calculado a partir dos arquivos importados. Resultados de vendas são diferentes da avaliação de mercado atual: um pode estar conciliado sem o outro.</p>'+
- '<div class="mt7-cards3" style="margin-top:15px">'+stat('Vendas sem custo',String(E.gains(S,ui.owner,'all').excludedSales),'Registros a conferir')+
- stat('Avisos de posição',String(issues.filter(i=>i.code==='historical-spouse-position'||i.code==='missing-position'||i.code==='old-position').length),'Valor atual ou posição histórica')+
+ '<div class="mt7-cards3" style="margin-top:15px">'+stat('Vendas sem custo',String(g.excludedSales),'Registros a conferir')+
+ stat('Avisos de posição',String(issues.filter(i=>i.code==='missing-position'||i.code==='old-position').length),'Valor atual ou posição histórica')+
  stat('Dados B3',String(S.records.filter(r=>ui.owner==='family'||r.owner===ui.owner).length),'Negociações e movimentações')+
  stat('Posições',String(p.holdings.length),'Por titular')+'</div>')+
  '<section class="mt7-checklist">'+issues.map(issue=>'<article class="mt7-check '+esc(issue.level)+'">'+
@@ -404,7 +410,7 @@ function download(name,body,type='application/json'){
  a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);
 }
 function changeData(next){
- S=E.normalizeState(next);render();
+ S=E.normalizeState(next);invalidateAnalysis();render();
  root.MoneyTrackerCloudV7?.scheduleSave(S);
 }
 async function updateQuote(symbol){
@@ -429,7 +435,7 @@ async function importFiles(files){
   ui.importMessage='Importação validada e enviada para sincronização.\n'+summary.files+' arquivos · '+summary.added+' lançamentos novos · '+summary.duplicates+' registros repetidos ignorados · '+summary.positionsChanged+' posições atualizadas.\n'+
   (summary.invalid?summary.invalid+' linhas não válidas ignoradas. Verifique o arquivo.\n':'')+
   summary.details.map(x=>x.name+': '+x.rows+' novos / '+x.positions+' posições').join('\n');
-  S=E.normalizeState(result.next);root.MoneyTrackerCloudV7?.scheduleSave(S);
+  S=E.normalizeState(result.next);invalidateAnalysis();root.MoneyTrackerCloudV7?.scheduleSave(S);
   showToast(summary.added+' registros e '+summary.positionsChanged+' posições processados. Verifique o status de sincronização.');
  }catch(err){ui.importMessage='Nenhum registro foi alterado. '+(err.message||err);showToast('Importação não concluída: '+(err.message||err),true);}
  finally{busy=false;render();}
@@ -438,7 +444,7 @@ function listen(){
  document.addEventListener('click',async event=>{
   const t=event.target,nav=t.closest('[data-nav]');
   if(nav){go(nav.dataset.nav);return;}
-  const owner=t.closest('[data-owner]');if(owner){ui.owner=owner.dataset.owner;ui.category='all';ui.search='';if(ui.owner!=='family')ui.importOwner=ui.owner;render();return;}
+  const owner=t.closest('[data-owner]');if(owner){ui.owner=owner.dataset.owner;invalidateAnalysis();ui.category='all';ui.search='';if(ui.owner!=='family')ui.importOwner=ui.owner;render();return;}
   const period=t.closest('[data-period]');if(period){ui.period=period.dataset.period;render();return;}
   const group=t.closest('[data-category]');if(group){ui.category=group.dataset.category;render();return;}
   const hist=t.closest('[data-history-kind]');if(hist){ui.historyKind=hist.dataset.historyKind;render();return;}
@@ -448,6 +454,7 @@ function listen(){
   if(!action)return;
   const a=action.dataset.action;
   if(a==='more-history'){ui.historyLimit+=70;render();}
+   if(a==='analyze'){invalidateAnalysis();analyzeNow();render();showToast('Análise recalculada com os dados atuais.');}
   if(a==='backup')download('moneytracker-v7-backup-'+E.isoNow()+'.json',JSON.stringify({format:'moneytracker-backup',version:7,date:new Date().toISOString(),data:S},null,2));
   if(a==='restore-pick')document.getElementById('mt7-restore-file')?.click();
   if(a==='sync')await root.MoneyTrackerCloudV7?.sync();
@@ -481,7 +488,7 @@ function listen(){
 }
 root.MoneyTrackerAppV7={
  getState:()=>S,
- setState:data=>{S=E.normalizeState(data);render();},
+ setState:data=>{S=E.normalizeState(data);invalidateAnalysis();render();},
  loginReady:user=>{auth=true;document.getElementById('mt7-auth').hidden=true;render();},
  loginNeeded:()=>{auth=false;document.getElementById('mt7-auth').hidden=false;},
  getUi:()=>ui,
