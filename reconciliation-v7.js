@@ -63,9 +63,19 @@ E.reconciliationReport=function(state,owner='family',period='all',today=E.isoNow
 const originalGaps=E.gaps;
 E.gaps=function(state,owner='family',today=E.isoNow()){
  const base=originalGaps(state,owner,today);
- if(!getEntries(state).length)return base.filter(x=>x.code!=='cash-flow-coverage');
+ // O relatório consolidado de 2024 já foi recebido: é referência histórica,
+ // não uma cotação para 2026. O aviso nunca deve solicitar o mesmo arquivo.
+ const historical=state&&state.spouseHistoricalPosition;
+ const revised=base.map(issue=>{
+  if(issue.owner!=='spouse'||issue.code!=='missing-position'||!historical?.rows?.length)return issue;
+  return {...issue,level:'warning',code:'historical-spouse-position',
+   title:'Posição da Jessica de 31/12/2024 já recebida',
+   why:'A B3 confirmou '+historical.rows.length+' ativos em 31/12/2024. Este relatório histórico foi vinculado ao aplicativo; não é valorização atual de 2026.',
+   action:'Nada a reenviar de 2024. Para valor de mercado atual, é necessária uma posição de 2026 se ela não estiver disponível nas fontes conectadas.'};
+ });
+ if(!getEntries(state).length)return revised.filter(x=>x.code!=='cash-flow-coverage');
  const includeSpouse=ownerSet(owner).includes('spouse');
- const items=base.filter(x=>x.code!=='cash-flow-coverage'&&
+ const items=revised.filter(x=>x.code!=='cash-flow-coverage'&&
   !(includeSpouse&&x.owner==='spouse'&&x.code==='unverified-sales'));
  if(!includeSpouse)return items;
  const report=audit(state,'spouse','all',today),g=E.gains(state,'spouse','all',today);
