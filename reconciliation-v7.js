@@ -142,7 +142,7 @@ E.gaps=function(state,owner='family',today=E.isoNow()){
   if(g.excludedSales<=0&&report.unmatched===0)continue;
   const raw=[...E.ledger(state,o).sales,...E.treasuryLedger(state,o).sales];
   const verified=new Set(report.checks.filter(x=>x.matched&&x.status==='CALCULAVEL_BRUTO')
-   .map(x=>x.owner+'|'+x.date+'|'+x.code));
+   .map(x=>x.owner+'|'+x.date+'|'+E.codeOf(x.code)));
   const unresolved=raw.filter(x=>!x.recognized&&!verified.has(x.owner+'|'+x.date+'|'+x.code));
   const codes=[...new Set(unresolved.map(x=>x.code))];
   items.push({level:'critical',owner:o,code:'reconciliation-unverified',
@@ -194,7 +194,7 @@ E.gains=function(state,owner='family',period='all',today=E.isoNow()){
  const realized=rounded(recognized.reduce((total,x)=>total+x.profit,0));
  const dividends=rounded(payouts.reduce((total,x)=>total+x.amount,0));
  const confirmedKeys=new Set(a.checks.filter(x=>x.matched&&x.status==='CALCULAVEL_BRUTO')
-  .map(x=>x.owner+'|'+x.date+'|'+x.code));
+  .map(x=>x.owner+'|'+x.date+'|'+E.codeOf(x.code)));
  const remainingProblems=(base.unmatched||[]).filter(p=>
   !confirmedKeys.has((p.owner||'me')+'|'+p.date+'|'+E.codeOf(p.code)));
  const parts=[];
