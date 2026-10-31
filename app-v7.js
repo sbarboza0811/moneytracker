@@ -27,8 +27,8 @@ function layout(content){
  '<aside class="mt7-side"><div class="mt7-brand"><i>↗</i><span>money<span>tracker</span></span></div>'+
  '<nav>'+NAV.map(n=>'<button type="button" data-nav="'+n[0]+'" class="'+(ui.page===n[0]?'active':'')+'"><span class="ico">'+n[1]+'</span>'+n[2]+'</button>').join('')+
  '<button data-nav="more"><span class="ico">☰</span>Mais</button></nav>'+
- '<div class="foot">Seus investimentos, no seu controle.<div class="mt7-version">MoneyTracker 7.3 · Dados privados</div></div></aside>'+
- '<main class="mt7-body"><header class="mt7-top"><div><div class="mt7-eyebrow">MoneyTracker / Versão 7</div><h1>'+pages[ui.page]+'</h1></div>'+
+ '<div class="foot">Seus investimentos, no seu controle.<div class="mt7-version">MoneyTracker 7.5 · Dados privados</div></div></aside>'+
+ '<main class="mt7-body"><header class="mt7-top"><div><div class="mt7-eyebrow">MoneyTracker / Versão 7.5</div><h1>'+pages[ui.page]+'</h1></div>'+
  '<div class="mt7-top-actions"><button data-nav="needs" title="O que falta para completar" class="mt7-iconbtn" aria-label="Pendências">☑</button>'+
  '<button data-nav="more" title="Conta, backup e sincronização" class="mt7-iconbtn" aria-label="Mais">☰</button></div></header>'+
  '<div class="mt7-owners" role="group" aria-label="Selecionar carteira">'+ownerButton('family','Família')+ownerButton('me','Minha')+ownerButton('spouse','Esposa')+'</div>'+
@@ -36,8 +36,8 @@ function layout(content){
  '<nav class="mt7-bottom" aria-label="Menu principal">'+NAV.map(n=>navButton(...n)).join('')+'</nav></div>';
 }
 function accountNotice(p){
- if(p.valuation==='mixed')return '<div class="mt7-note warning"><strong>Consolidado indicativo, não cotação da família.</strong> A sua Posição B3 e o custo histórico da esposa usam bases diferentes. Veja as fontes abaixo ou importe a Posição B3 dela. <button data-nav="needs">Ver o que falta ›</button></div>';
- if(p.valuation==='historical'&&p.holdings.length)return '<div class="mt7-note warning"><strong>Custo histórico, não patrimônio atualizado.</strong> Sem o extrato Posição B3, não é possível confirmar quantidade e preço atuais. <button data-nav="needs">Como resolver ›</button></div>';
+ if(p.valuation==='mixed')return '<div class="mt7-note warning"><strong>Patrimônio familiar com bases diferentes.</strong> Sua posição de 2026 é um valor de mercado; a da Jessica é reconstruída do histórico, não uma posição atual de 2026. As vendas históricas dela já estão conciliadas. <button data-nav="needs">Detalhes ›</button></div>';
+ if(p.valuation==='historical'&&p.holdings.length)return '<div class="mt7-note"><strong>Carteira estimada por custo histórico.</strong> As vendas da Jessica estão conciliadas; o valor de mercado aberto não é uma cotação atual. <button data-nav="needs">Detalhes ›</button></div>';
  return '';
 }
 function sourceSplit(p){
@@ -62,7 +62,10 @@ function periodFilters(){
  '<button type="button" data-period="'+v+'" aria-pressed="'+String(ui.period===v)+'" class="'+(ui.period===v?'active':'')+'">'+label+'</button>').join('')+'</div>';
 }
 function profitSummary(g){
- const ready=g.complete,cl=ready?'':'warn',label=ready?'Conciliado':'Incompleto';
+ const salesPending=Number(g.excludedSales||0);
+ const ready=g.complete,cl=ready||salesPending===0?'':'warn';
+ const label=ready?'Resultado completo':salesPending?
+  salesPending+' vendas sem custo confirmado':'Vendas conciliadas · avaliação parcial';
  return card(titlebar('Lucro identificado · '+E.periodLabel[ui.period],'profit','Detalhar')+
  periodFilters()+
  '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px"><div class="mt7-mainnumber">'+money(g.profit)+'</div><span class="mt7-pill '+cl+'">'+label+'</span></div>'+
@@ -278,11 +281,38 @@ function imported(){
  card(titlebar('Seus arquivos importados')+'<p>Registros de '+esc(owner==='me'?'sua carteira':'sua esposa')+': '+S.records.filter(r=>r.owner===owner).length+'. Fontes registradas: '+src+'.</p>'+
  '<button class="mt7-btn secondary" data-nav="history">Ver histórico</button>');
 }
+
+function pendingSalesDetails(){
+ if(ui.owner==='spouse')return '';
+ const stock=E.ledger(S,'me').sales,treasury=E.treasuryLedger(S,'me').sales;
+ const misses=[...stock,...treasury].filter(x=>!x.recognized);
+ if(!misses.length)return card(titlebar('Minhas vendas históricas')+
+  '<p>Todos os custos de venda estão conciliados para a carteira selecionada.</p>');
+ const grouped=new Map();
+ for(const x of misses){
+  const key=x.date+'|'+x.code;
+  if(!grouped.has(key))grouped.set(key,{date:x.date,code:x.code,qty:0,gross:0,count:0,reasons:new Set()});
+  const g=grouped.get(key);g.qty+=x.qty;g.gross+=x.gross;g.count++;
+  g.reasons.add(x.reason||'Aquisição anterior ou evento societário');
+ }
+ const arr=[...grouped.values()].sort((a,b)=>b.date.localeCompare(a.date)||a.code.localeCompare(b.code));
+ return card(titlebar('Minhas vendas ainda sem custo comprovado')+
+  '<p><b>'+misses.length+' registros em '+arr.length+' grupos de ativo e data.</b> Essa pendência é da carteira do Samuel, não da Jessica. A negociação da B3 já foi recebida; é a origem ou o custo das unidades que falta conciliar.</p>'+
+  '<div class="mt7-checklist">'+arr.map(x=>
+   '<article class="mt7-check warning"><h3>'+esc(x.code)+' · '+esc(E.dateBR(x.date))+
+   '</h3><p>'+fmt(x.qty)+' unidades · Valor vendido '+money(x.gross)+
+   (x.count>1?' · '+x.count+' negócios':'')+'</p>'+
+   '<div class="action"><b>Motivo</b><p>'+esc([...x.reasons].join('; '))+
+   '</p></div></article>'
+  ).join('')+'</div>');
+}
+
 function needs(){
  const p=E.portfolio(S,ui.owner),issues=E.gaps(S,ui.owner);
- return reconciliationCard(true)+card(titlebar('O que falta para resultados completos')+
- '<p>Não é necessário configurar lucro. Este checklist é gerado automaticamente a partir dos arquivos recebidos.</p>'+
- '<div class="mt7-cards3" style="margin-top:15px">'+stat('Total de pendências',String(issues.length),'Inclui avisos de cobertura')+
+ return reconciliationCard(true)+pendingSalesDetails()+card(titlebar('Diagnóstico: operações e valores de mercado')+
+ '<p>Diagnóstico calculado a partir dos arquivos importados. Resultados de vendas são diferentes da avaliação de mercado atual: um pode estar conciliado sem o outro.</p>'+
+ '<div class="mt7-cards3" style="margin-top:15px">'+stat('Vendas sem custo',String(E.gains(S,ui.owner,'all').excludedSales),'Registros a conferir')+
+ stat('Avisos de posição',String(issues.filter(i=>i.code==='historical-spouse-position'||i.code==='missing-position'||i.code==='old-position').length),'Valor atual ou posição histórica')+
  stat('Dados B3',String(S.records.filter(r=>ui.owner==='family'||r.owner===ui.owner).length),'Negociações e movimentações')+
  stat('Posições',String(p.holdings.length),'Por titular')+'</div>')+
  '<section class="mt7-checklist">'+issues.map(issue=>'<article class="mt7-check '+esc(issue.level)+'">'+
@@ -316,8 +346,8 @@ function insights(){
  (pct>=25?'<div class="mt7-note warning">Concentração elevada em um ativo (25% ou mais do total). Confira o risco antes de novos aportes.</div>':'')+
  '<p>Estas análises são regras explicáveis. Não são recomendações de investimento nem consideram sua situação tributária pessoal.</p>')+
  card(titlebar('Comparações de desempenho')+
- '<div class="mt7-note warning">Faltam séries confiáveis de patrimônio e aportes em datas históricas para comparar sua rentabilidade com CDI e Ibovespa sem distorção. Consulte as pendências.</div>'+
- '<button class="mt7-btn secondary" data-nav="needs">Ver dados necessários</button>');
+ '<div class="mt7-note">A comparação com CDI e Ibovespa ainda não foi implementada com séries históricas e aportes comparáveis. Isso não significa que faltem notas de corretagem.</div>'+
+ '<button class="mt7-btn secondary" data-nav="profit">Ver lucro realizado</button>');
 }
 function quotes(){
  const p=E.portfolio(S,ui.owner),items=p.holdings.filter(r=>r.group!=='Tesouro');
@@ -339,7 +369,7 @@ function more(){
  '<div class="mt7-actionrow"><button class="mt7-btn" data-action="backup">Exportar backup JSON</button>'+
  '<button class="mt7-btn ghost" data-action="restore-pick">Restaurar backup</button></div>'+
  '<input type="file" id="mt7-restore-file" accept="application/json,.json" hidden>'+
- '<p class="mt7-footnote">Versão 7 · Não altera a conta ou os dados de outros projetos.</p>');
+ '<p class="mt7-footnote">Versão 7.5 · Não altera a conta ou os dados de outros projetos.</p>');
 }
 function render(){
  const app=document.getElementById('mt7-app');if(!app)return;
