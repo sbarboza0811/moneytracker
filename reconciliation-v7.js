@@ -53,8 +53,8 @@ function audit(state,owner='family',period='all',today=E.isoNow()){
   checks.push({...rec,matched});
   if(!matched)continue;
   const verified=rec.status==='CALCULAVEL_BRUTO'&&Number.isFinite(num(rec.basis))&&rec.basis!==null;
-  for(const row of rows){
-   // Aloca lucro por valor vendido, preservando as linhas individuais da B3.
+  for(const row of groupRows){
+   // Aloca lucro apenas às linhas conciliadas desta venda, sem sobrescrever outra corretora.
    const share=gross>0?num(row.gross)/gross:1/rows.length;
    overrides.set(row,{
     recognized:verified,uncertain:!verified,
