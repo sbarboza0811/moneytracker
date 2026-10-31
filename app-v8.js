@@ -442,7 +442,7 @@ function pageQuotes(){
   const date=fromQuote?h.quoteDate:h.date;
   const origin=fromQuote?(isOld?'Última cotação salva (desatualizada)':'Cotação disponível')+' · '+escape(h.quoteProvider||''):(hasB3?'Última posição B3 (histórica)':'Sem cotação ou preço de posição');
   return '<div class="m8-quote-row"><div class="m8-quote-name"><b>'+escape(h.code)+'</b><small>'+escape(me(h.owner))+' · '+fmt(h.qty)+' un.</small><small>'+origin+(date?' · '+escape(E.dateBR(date)):'')+'</small></div>'+
-  '<div class="m8-quote-prices"><b>'+price+'</b><strong>'+value+'</strong></div>'+
+  '<div class="m8-quote-prices'+(isOld?' m8-quote-outdated':'')+'"><b>'+price+'</b><strong>'+value+'</strong></div>'+
   '<button class="m8-btn sub" data-quote="'+escape(h.code)+'" '+(U.quoteLoading?'disabled':'')+'>Consultar</button></div>';
  }).join('')+(holdings.length>U.limit?'<button class="m8-btn sub" data-action="more">Ver mais</button>':''):empty('Nenhum ativo negociado identificado.'))+
  '<p class="m8-hint">Fontes: <a href="https://capitalagora.com.br/api" target="_blank" rel="noopener">Capital Agora</a> (fechamento B3) e brapi.dev, quando disponível. O valor exibido pode estar desatualizado.</p>');
