@@ -465,3 +465,25 @@ html[data-theme="dark"] .m8-panel .m8-hint a{color:#a9c2ff}
  .m8-quote-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
  .m8-quote-summary>div:last-child{grid-column:1/-1}
 }
+
+
+/* MoneyTracker 2.4.2 — quick update on home */
+.m8-home-refresh{
+ display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:7px 14px;
+ padding:14px 17px;border-radius:15px;background:linear-gradient(120deg,#eaf2ff,#f9fbff);
+ border:1px solid #d9e5fa;min-width:0;
+}
+.m8-home-refresh-text{display:flex;flex-direction:column;gap:5px;min-width:0}
+.m8-home-refresh-text b{font-size:15px;color:#27446e}
+.m8-home-refresh-text small{font-size:11px;color:#647c9d}
+.m8-home-refresh-btn{font-size:13px;min-height:44px}
+.m8-home-refresh>span{grid-column:1/-1;font-size:11px;color:#6f84a5;line-height:1.4;overflow-wrap:anywhere}
+html[data-theme="dark"] .m8-home-refresh{background:linear-gradient(120deg,#1b304f,#15243b);border-color:#385174}
+html[data-theme="dark"] .m8-home-refresh-text b{color:#edf4ff}
+html[data-theme="dark"] .m8-home-refresh-text small,
+html[data-theme="dark"] .m8-home-refresh>span{color:#b6c8e3}
+@media(max-width:790px){
+ .m8-home-refresh{grid-template-columns:minmax(0,1fr);padding:13px;gap:9px}
+ .m8-home-refresh-btn{width:100%;min-height:46px}
+ .m8-home-refresh-text b{font-size:14px}
+}
