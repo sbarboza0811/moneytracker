@@ -197,6 +197,14 @@ function reconciliationCard(pendenciesOnly=false){
    ' ativos, com <b>'+money(historical.totals?.all||0)+'</b> no valor da época. Os dados foram recuperados do relatório consolidado da B3 e estão armazenados na sua conta.</p>'+
    '<p>Esse montante é <b>histórico</b> e não é usado como valor de mercado em 2026. Não é necessário reenviar a posição de 2024.</p>');
  }
+ const derived=S.reconciliation?.spouseDerivedHoldings;
+ if(derived?.positions?.length&&!S.spousePositionSnapshot?.rows?.length){
+  out+=card(titlebar('Jessica · posição reconstruída até setembro/2026')+
+    '<p>Reconstituí <b>'+derived.positions.length+' ativos</b> usando as posições B3 de 31/12/2024, '+derived.verifiedTrades+' negociações de 2025/2026 e o desdobramento ALZR11 de maio de 2025. <b>As quantidades são estimadas, não um extrato oficial de 2026.</b> Sem cotação e eventos completos, não são somadas ao patrimônio ou ao lucro atual.</p>'+
+    '<div class="mt7-checklist">'+derived.positions.map(x=>
+      '<article class="mt7-check"><h3>'+esc(x.code)+'</h3><p>'+fmt(x.quantity)+' cotas/ações estimadas'+
+      (x.corporateAction?' · '+esc(x.corporateAction):'')+'</p></article>').join('')+'</div>');
+ }
  if(!pendenciesOnly&&(ui.period==='all'||ui.period==='5y')){
   const years=S.reconciliation.annualIncome||[];
   const y24=years.find(x=>x.year===2024);
