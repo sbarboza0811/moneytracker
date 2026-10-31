@@ -338,8 +338,27 @@ const top=D.active[0],largest=CATS.map(c=>({...c,v:D.cats[c.id]||0})).sort((a,b)
 return `<section class="v2panel"><div class="v2section"><h2>Visão geral</h2><span class="v2chip">✧ Diagnóstico</span></div><div class="v2value" style="font-size:21px">${D.total?'Maior peso: '+h(largest.n):'Sem posição importada'}</div><p class="v2muted" style="margin-top:8px">${D.total?v2pct(largest.v,D.total)+' do valor informado nessa classe.':'Atualize sua posição para analisar.'}</p></section><section class="v2panel"><div class="v2section"><h2>Leituras da carteira</h2></div>${[['◉','Maior posição',top?`${h(top.product||top.code)} · ${money(top.cost)}`:'Não identificada'],['◎','Exposição global',`${money(D.cats.global||0)} · ${v2pct(D.cats.global||0,D.total)}`],['↻','Atualização',D.reported?`Posição B3 de ${v2date(D.reported.date)}; não são preços ao vivo.`:'Importe um extrato de Posição B3']].map(([i,t,x])=>`<div class="v2row"><span class="v2bubble">${i}</span><span class="v2rowinfo"><b>${t}</b><small style="white-space:normal">${x}</small></span></div>`).join('')}</section><section class="v2panel"><div class="v2section"><h2>Objetivo</h2><button data-page="goals">Editar ›</button></div><div class="v2row" style="border:0"><div class="v2rowinfo"><b>${h(g.name||'Seu objetivo')}</b><small>${money(D.total)} / ${money(g.amount||0)}</small></div><strong>${nfmt(progress,1)}%</strong></div><div class="v2progress"><div style="width:${progress}%"></div></div><p class="v2muted" style="margin-top:12px">Faltam ${money(Math.max(0,(g.amount||0)-D.total))}</p></section><div class="v2quick"><button class="v2btn outline" data-page="strategy">Alocação-alvo</button><button class="v2btn outline" data-page="scenarios">Cenários</button></div>`;
 }
 function v2files(D){
-const p=D.reported;
-return `<section class="v2panel"><div class="v2upload" id="drop-zone"><div style="font-size:35px;color:#0c805d">⇧</div><strong>Importar arquivo Excel</strong><p class="v2muted" style="margin-bottom:18px">Negociações, movimentações ou posição atual.</p><div class="v2importcontrols"><label for="v2-import-owner" style="display:block;font-weight:750;font-size:13px;text-align:left;margin:10px 0 7px">Importar para</label><select id="v2-import-owner" class="v2field" aria-label="Titular dos investimentos"><option value="me" ${(ui.importOwner||'me')==='me'?'selected':''}>Minha carteira</option><option value="spouse" ${ui.importOwner==='spouse'?'selected':''}>Carteira da minha esposa</option></select><label for="v2-file-input" style="display:block;font-weight:750;font-size:13px;text-align:left;margin:16px 0 7px">Arquivo da B3</label><input id="v2-file-input" name="b3" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple aria-label="Selecione uma ou mais planilhas XLSX da B3" style="display:block;width:100%;max-width:100%;padding:13px;border:1px solid #c7e2d3;background:#fff;border-radius:12px;color:#174f3b;font-size:13px"></div></div><p class="v2note">Escolha o titular e selecione os arquivos. Negociação, Movimentação e Posição da B3. Registros repetidos são ignorados.</p>${ui.report?`<div class="v2callout" style="margin-top:16px;white-space:pre-line">${h(ui.report)}</div>`:''}</section><section class="v2panel"><div class="v2section"><h2>Como funciona?</h2></div>${[['1','Negociação','Compras e vendas'],['2','Movimentação','Proventos e eventos'],['3','Posição','Atualiza patrimônio sem somar compras novamente']].map(([a,b,c])=>`<div class="v2row"><span class="v2bubble">${a}</span><span class="v2rowinfo"><b>${b}</b><small>${c}</small></span></div>`).join('')}</section><section class="v2panel"><div class="v2section"><h2>Última posição B3</h2></div><div class="v2value">${p?money(p.total):'—'}</div><p class="v2muted">${p?p.rows.length+' posições · '+v2date(p.date):'Sem posição'}</p></section><section class="v2panel"><div class="v2section"><h2>Backup e exportação</h2></div><div class="v2quick"><button class="v2btn" data-act="backup">Backup completo</button><button class="v2btn outline" data-act="import-backup">Restaurar JSON</button><button class="v2btn outline" data-act="export-trade">Excel negociação</button><button class="v2btn outline" data-act="export-mov">Excel movimentação</button></div></section>`;
+ const owner=ui.importOwner==='spouse'?'spouse':ui.importOwner==='me'?'me':(ui.owner==='spouse'?'spouse':'me');
+ const snapshot=owner==='spouse'?S.spousePositionSnapshot:S.positionSnapshot;
+ return '<section class="v2panel"><div class="v2section"><h2>Importar da B3</h2><span class="v2chip">Excel</span></div>'+
+ '<p class="v4importlabel">Para qual carteira?</p>'+
+ '<div class="v4ownerselect" role="group" aria-label="Destino da importação">'+
+ '<button type="button" data-v4-import-owner="me" class="'+(owner==='me'?'selected':'')+'">Minha carteira</button>'+
+ '<button type="button" data-v4-import-owner="spouse" class="'+(owner==='spouse'?'selected':'')+'">Carteira da esposa</button></div>'+
+ '<div class="v4nativefile"><label for="v2-file-input">Escolher arquivos Excel</label>'+
+ '<input id="v2-file-input" type="file" name="b3" multiple accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-label="Arquivos B3 Excel XLSX" />'+
+ '<p>Negociação, Movimentação ou Posição. Pode selecionar vários arquivos.</p></div>'+
+ (ui.report?'<div class="v2callout" role="status" style="margin-top:15px;white-space:pre-line">'+h(ui.report)+'</div>':'')+
+ '</section>'+
+ '<section class="v2panel"><div class="v2section"><h2>'+(owner==='spouse'?'Posição da esposa':'Minha posição')+'</h2><span class="v2chip">'+(snapshot?.rows?.length||0)+' ativos</span></div>'+
+ '<div class="v2value">'+(snapshot?money(snapshot.total):'Sem posição importada')+'</div>'+
+ '<p class="v2muted">'+(snapshot?'Arquivo de '+v2date(snapshot.date):'Importe a planilha Posição para atualizar o patrimônio.')+'</p>'+
+ '<button class="v2btn outline" data-page="portfolio">Ver carteira ›</button></section>'+
+ '<section class="v2panel"><div class="v2section"><h2>Gerenciar dados</h2></div><div class="v2quick">'+
+ '<button class="v2btn outline" data-act="backup">Backup completo</button>'+
+ '<button class="v2btn outline" data-act="import-backup">Restaurar JSON</button>'+
+ '<button class="v2btn outline" data-act="export-trade">Exportar negociações</button>'+
+ '<button class="v2btn outline" data-act="export-mov">Exportar movimentações</button></div></section>';
 }
 function v2records(D){
 const t=ui.kind||'trade';let records=groupRecords(t).filter(x=>!ui.search||norm(x.v.join(' ')).includes(norm(ui.search))).sort((a,b)=>dateOf(b).localeCompare(dateOf(a)));
@@ -639,9 +658,13 @@ function dispatch(e){
   const sc=e.target.closest('[data-scenario]');if(sc){S.scenario=sc.dataset.scenario;save();render();return;}
   const edit=e.target.closest('[data-edit]');if(edit){const r=S.records.find(x=>x.id===edit.dataset.edit);if(r){ui.modal={t:r.t,id:r.id};renderModal();}return;}
   const del=e.target.closest('[data-delete]');if(del){const r=S.records.find(x=>x.id===del.dataset.delete);if(r&&confirm('Excluir definitivamente este registro?')){S.records=S.records.filter(x=>x.id!==r.id);save();render();toast('Registro excluído.');}return;}
+  const importOwner=e.target.closest('[data-v4-import-owner]');
+  if(importOwner){ui.importOwner=importOwner.dataset.v4ImportOwner==='spouse'?'spouse':'me';ui.owner=ui.importOwner;ui.report='';render();return;}
+  const chartYear=e.target.closest('[data-v4-year]');
+  if(chartYear){ui.chartYear=chartYear.dataset.v4Year;render();return;}
   const a=e.target.closest('[data-act]');if(!a)return;const act=a.dataset.act;
   if(act==='v3-benchmark'){v3benchmarks();return;}
-  if(act==='open-import'){ui.importOwner=ui.owner==='spouse'?'spouse':ui.importOwner||'me';page='files';window.scrollTo(0,0);render();return;}if(act==='add-trade'||act==='add-mov'){ui.modal={t:act==='add-mov'?'mov':'trade'};renderModal();return;}
+  if(act==='open-import'){ui.importOwner=ui.owner==='spouse'?'spouse':ui.owner==='me'?'me':ui.importOwner||'me';page='files';window.scrollTo(0,0);render();return;}if(act==='add-trade'||act==='add-mov'){ui.modal={t:act==='add-mov'?'mov':'trade'};renderModal();return;}
   if(act==='close-modal'){ui.modal=null;$('.modal-bg')?.remove();return;}
   if(act==='show-more'){ui.pageLimit+=80;render();return;}
   if(act==='export-trade'||act==='export-mov'){exportSheet(act==='export-trade'?'trade':'mov');return;}
@@ -688,7 +711,7 @@ $('#file-input').addEventListener('change',async e=>{if(e.target.files.length)aw
 $('#backup-input').addEventListener('change',async e=>{if(e.target.files.length)await restoreBackup(e.target.files[0]);e.target.value='';});
 document.addEventListener('dragover',e=>{if(e.dataTransfer?.types?.includes('Files')){e.preventDefault();$('#drop-zone')?.classList.add('drag');}});
 document.addEventListener('dragleave',e=>{$('#drop-zone')?.classList.remove('drag');});
-document.addEventListener('drop',async e=>{if(e.dataTransfer?.files?.length){e.preventDefault();$('#drop-zone')?.classList.remove('drag');await importExcel(e.dataTransfer.files);}});
+
 render();
 window.MoneyTrackerBridge={getState:()=>S,setState:(obj)=>{if(!obj||obj.v!==3||!Array.isArray(obj.records))throw new Error("Formato inválido de dados");S=obj;render();},reset:()=>{S=original();render();}};
 window.__MONEYTRACKER_TEST__={Excel,S,activity,fingerprint,canon,validRow,importExcel,exportSheet,render,go:(p)=>{page=p;render();}};
