@@ -233,8 +233,10 @@ function barsConfirmedWealth(){
 }
 function wealthDashboard(large=false){
  const buttons='<div class="m8-pills"><button data-grain="month" class="'+(U.grain==='month'?'sel':'')+'">Mensal</button><button data-grain="year" class="'+(U.grain==='year'?'sel':'')+'">Anual</button></div>';
- const flow=box(header('Investimentos × lucro realizado', 'Barras por '+(U.grain==='year'?'ano':'mês')+' · filtradas por titular, classe e período')+buttons+barsInvestedProfit(),'m8-wealth-major');
- const confirmed=box(header('Patrimônio: investido × valorização','Somente datas com posição e custo disponíveis')+barsConfirmedWealth(),'m8-wealth-minor');
+ const hasOperations=purchaseFlows().length>0,hasSnapshots=confirmedWealthData().length>0;
+ const flow=hasOperations?box(header('Investimentos × lucro realizado', 'Barras por '+(U.grain==='year'?'ano':'mês')+' · filtradas por titular, classe e período')+buttons+barsInvestedProfit(),'m8-wealth-major'):'';
+ const confirmed=hasSnapshots?box(header('Patrimônio: investido × valorização','Somente datas com posição e custo disponíveis')+buttons+barsConfirmedWealth(),'m8-wealth-minor'):'';
+ if(!flow&&!confirmed)return '';
  return '<section class="m8-wealth-dashboard">'+(large?flow+confirmed:'<div class="m8-grid m8-wealth-grid">'+flow+confirmed+'</div>')+'</section>';
 }
 
@@ -243,7 +245,7 @@ function pageHome(){
  return kpi(d)+dataNotice(d)+wealthDashboard()+
  '<div class="m8-grid m8-two">'+box(header('Distribuição da carteira','Selecione uma classe para explorar')+donut(alloc(d),d.total))+
  box(header('Maiores posições','Acesse um ativo para ver suas operações',action('Carteira completa','portfolio',true))+d.holdings.slice().sort((a,b)=>b.value-a.value).slice(0,6).map(h=>assetRow(h,d)).join(''))+'</div>'+
- box(header('Lucros e proventos mensais','Resultado realizado sem ganhos em aberto',action('Ver resultados','result',true))+barChart(m.length>24?m.slice(-24):m,U.grain));
+ (m.some(x=>Math.abs(x.sales)+Math.abs(x.dividends)>.000001)?box(header('Lucros e proventos mensais','Resultado realizado sem ganhos em aberto',action('Ver resultados','result',true))+barChart(m.length>24?m.slice(-24):m,U.grain)):'');
 }
 function pagePortfolio(){
  const d=rows(),classes=alloc(d);let sorted=d.holdings.slice();
@@ -294,7 +296,7 @@ function pageResult(){
   box(header('Evolução do resultado','Vendas e proventos '+(U.grain==='year'?'anuais':'mensais')+' · clique numa barra para filtrar')+
    '<div class="m8-pills"><button data-grain="month" class="'+(U.grain==='month'?'sel':'')+'">Mensal</button><button data-grain="year" class="'+(U.grain==='year'?'sel':'')+'">Anual</button></div>'+barChart(m,U.grain),'m8-results-graph'):'';
  const classPanel=groups.length?box(header('Lucro/prejuízo por classe','Selecione uma classe para filtrar os resultados')+
-  groups.map(x=>'<button class="m8-class-result" data-class="'+escape(x.name)+'"><span><b>'+escape(x.name)+'</b><small>'+x.count+' vendas · R$ vendidos '+money(x.gross)+(x.unknown?' · '+x.unknown+' sem custo':'')+'</small></span><strong class="'+(x.profit<0?'negative':'positive')+'">'+money(x.profit)+'</strong><span>›</span></button>').join('')):'';
+  groups.map(x=>'<button class="m8-class-result" data-class="'+escape(x.name)+'"><span><b>'+escape(x.name)+'</b><small>'+x.count+' vendas · vendido '+money(x.gross)+(x.unknown?' · '+x.unknown+' sem custo':'')+'</small></span><strong class="'+(x.profit<0?'negative':'positive')+'">'+money(x.profit)+'</strong><span>›</span></button>').join('')):'';
  const assetGroups=[...perAsset.values()].sort((x,y)=>Math.abs(y.profit)-Math.abs(x.profit));
  const assetPanel=assetGroups.length?box(header('Ativos que geraram resultado','Ranking das vendas do período')+
   assetGroups.slice(0,10).map(x=>'<div class="m8-tx"><div><b>'+escape(x.code)+'</b><small>'+escape(me(x.owner))+' · '+x.count+' vendas'+(x.unknown?' · '+x.unknown+' a conciliar':'')+'</small></div><strong class="'+(x.profit<0?'negative':'positive')+'">'+money(x.profit)+'</strong></div>').join('')):'';
@@ -321,14 +323,14 @@ function pageIncome(){
  const d=rows(),m=getMonths(d);
  return '<div class="m8-kpis">'+iconStat('Proventos recebidos',money(d.dividends),d.payouts.length+' créditos','violet','income')+
  iconStat('Titular',me(U.owner),'Alterável no filtro global','blue','income')+'</div>'+
- box(header('Evolução dos proventos','Por mês ou ano')+'<div class="m8-pills"><button data-grain="month" class="'+(U.grain==='month'?'sel':'')+'">Mensal</button><button data-grain="year" class="'+(U.grain==='year'?'sel':'')+'">Anual</button></div>'+barChart(m,U.grain,true))+
+ (d.payouts.length?box(header('Evolução dos proventos','Por mês ou ano')+'<div class="m8-pills"><button data-grain="month" class="'+(U.grain==='month'?'sel':'')+'">Mensal</button><button data-grain="year" class="'+(U.grain==='year'?'sel':'')+'">Anual</button></div>'+barChart(m,U.grain,true)):'')+
  box(header('Pagamentos individuais',d.payouts.length+' proventos no intervalo')+(d.payouts.length?d.payouts.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,U.limit).map(x=>'<div class="m8-tx"><div><b>'+escape(x.code)+'</b><small>'+escape(me(x.owner))+' · '+E.dateBR(x.date)+' · '+escape(x.type)+'</small></div><strong>'+money(x.amount)+'</strong></div>').join(''):empty('Nenhum provento neste período.'))+
  (d.payouts.length>U.limit?'<button class="m8-btn sub" data-action="more">Carregar mais</button>':''));
 }
 function compareTrend(parts,from,to){
  const byOwner=parts.map(p=>monthly(p.sales,p.div,from,to));
  const data=byOwner[0].map((r,i)=>({date:r.date,a:r.sales+r.dividends,b:(byOwner[1][i]?.sales||0)+(byOwner[1][i]?.dividends||0)}));
- if(!data.length)return empty('Sem registros comparáveis neste intervalo.');
+ if(!data.length||!data.some(r=>Math.abs(r.a)+Math.abs(r.b)>.000001))return '';
  const visible=data.slice(-24),w=Math.max(700,visible.length*46),h=245,baseline=135;
  const max=Math.max(1,...visible.flatMap(p=>[Math.abs(p.a),Math.abs(p.b)])),scale=95/max;
  const rects=visible.map((p,i)=>{
