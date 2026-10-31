@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0d684b"><meta name="description" content="MoneyTracker 7: visão familiar, importação B3 e lucro automático">
+<title>MoneyTracker 7 | Investimentos</title>
+<link rel="icon" type="image/png" href="./icons/icon-192.png">
+<link rel="stylesheet" href="./app-v7.css">
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
+<script defer src="./config.js"></script>
+<script defer src="./excel-v7.js"></script>
+<script defer src="./engine-v7.js"></script>
+<script defer src="./app-v7.js"></script>
+<script defer src="./cloud-v7.js"></script>
+</head><body>
+<div id="mt7-app"><main style="padding:38px;color:#296149">Iniciando MoneyTracker 7…</main></div>
+<div id="mt7-auth" class="mt7-auth" aria-live="polite">
+<section class="mt7-authcard" role="region" aria-label="Entrar no MoneyTracker">
+<div class="mark">↗</div><h1>MoneyTracker</h1>
+<p id="mt7-auth-wait">Verificando sua sessão salva. Seus investimentos continuam privados.</p>
+<form id="mt7-auth-form" hidden>
+<div class="mt7-field"><label for="mt7-email">E-mail</label><input id="mt7-email" class="mt7-input" type="email" autocomplete="email" required></div>
+<div class="mt7-field"><label for="mt7-password">Senha</label><input id="mt7-password" class="mt7-input" type="password" autocomplete="current-password" minlength="6" required></div>
+<button id="mt7-login" class="mt7-btn" type="submit">Entrar</button>
+<button id="mt7-signup" class="authlink" type="button">Criar conta</button>
+</form>
+<button id="mt7-auth-retry" class="mt7-btn secondary" type="button" hidden>Tentar novamente</button>
+<p id="mt7-auth-status" class="mt7-auth-status"></p>
+</section></div>
+<div id="mt7-toasts" class="mt7-toasts" aria-live="polite"></div>
+</body></html>
