@@ -111,18 +111,26 @@ E.gains=function(state,owner='family',period='all',today=E.isoNow()){
  payouts.forEach(x=>add(x.date,'dividends',x.amount));
  const realized=rounded(recognized.reduce((total,x)=>total+x.profit,0));
  const dividends=rounded(payouts.reduce((total,x)=>total+x.amount,0));
+ const confirmedKeys=new Set(a.checks.filter(x=>x.matched&&x.status==='CALCULAVEL_BRUTO')
+  .map(x=>'spouse|'+x.date+'|'+x.code));
+ const remainingProblems=(base.unmatched||[]).filter(p=>
+  !confirmedKeys.has((p.owner||'spouse')+'|'+p.date+'|'+E.codeOf(p.code)));
  const parts=[];
  if(excluded.length)parts.push(excluded.length+' negociações sem custo confirmado foram excluídas do lucro.');
  if(a.unmatched)parts.push(a.unmatched+' conciliações não coincidiram com as negociações importadas.');
- if(base.missing)parts.push(base.missing+' posições abertas sem custo/preço suficiente.');
+ if(base.missing){
+  if(owner==='spouse'&&!state.spousePositionSnapshot?.rows?.length)
+   parts.push('Posição histórica de Jessica (31/12/2024) já recebida; sem posição atual, valorização em aberto de 2026 não apurada.');
+  else parts.push(base.missing+' posições abertas sem custo/preço suficiente.');
+ }
  if(period!=='all')parts.push('Sem preço histórico, a valorização de posições abertas neste intervalo não é apurada.');
- if(base.unmatched?.length)parts.push('Histórico societário e custos de posições ainda precisam de conferência.');
- return{...base,realized,dividends,profit:rounded(realized+dividends+base.openIncluded),
+ if(remainingProblems.length)parts.push('Existem '+remainingProblems.length+' problemas históricos ainda não conciliados.');
+ return{...base,unmatched:remainingProblems,realized,dividends,profit:rounded(realized+dividends+base.openIncluded),
   sales:recognized.length,totalSales:sales.length,excludedSales:excluded.length,
   excludedGross:excluded.reduce((total,x)=>total+x.gross,0),
   payments:payouts.length,monthly:[...monthly.values()].sort((x,y)=>x.month.localeCompare(y.month)),
-  complete:base.complete&&excluded.length===0&&a.unmatched===0&&a.provisional===0&&a.incomplete===0,
-  partial:!(base.complete&&excluded.length===0&&a.unmatched===0&&a.provisional===0&&a.incomplete===0),warning:parts.join(' '),
+  complete:base.missing===0&&remainingProblems.length===0&&excluded.length===0&&a.unmatched===0&&a.provisional===0&&a.incomplete===0&&period==='all',
+  partial:!(base.missing===0&&remainingProblems.length===0&&excluded.length===0&&a.unmatched===0&&a.provisional===0&&a.incomplete===0&&period==='all'),warning:parts.join(' '),
   reconciliationVerified:a.verified,reconciliationProvisional:a.provisional,
   reconciliationIncomplete:a.incomplete,reconciliationUnmatched:a.unmatched};
 };
