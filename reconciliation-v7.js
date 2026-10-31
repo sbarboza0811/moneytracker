@@ -164,8 +164,8 @@ E.gains=function(state,owner='family',period='all',today=E.isoNow()){
   sales:recognized.length,totalSales:sales.length,excludedSales:excluded.length,
   excludedGross:excluded.reduce((total,x)=>total+x.gross,0),
   payments:payouts.length,monthly:[...monthly.values()].sort((x,y)=>x.month.localeCompare(y.month)),
-  complete:missing===0&&remainingProblems.length===0&&excluded.length===0&&a.unmatched===0&&a.provisional===0&&a.incomplete===0&&!custodyMismatch&&period==='all',
-  partial:!(missing===0&&remainingProblems.length===0&&excluded.length===0&&a.unmatched===0&&a.provisional===0&&a.incomplete===0&&!custodyMismatch&&period==='all'),warning:parts.join(' '),
+  complete:missing===0&&base.incomePending===0&&remainingProblems.length===0&&excluded.length===0&&a.unmatched===0&&a.provisional===0&&a.incomplete===0&&!custodyMismatch&&period==='all',
+  partial:!(missing===0&&base.incomePending===0&&remainingProblems.length===0&&excluded.length===0&&a.unmatched===0&&a.provisional===0&&a.incomplete===0&&!custodyMismatch&&period==='all'),warning:parts.join(' '),
   reconciliationVerified:a.verified,reconciliationProvisional:a.provisional,
   reconciliationIncomplete:a.incomplete,reconciliationUnmatched:a.unmatched};
 };
