@@ -224,9 +224,36 @@ function reconciliationCard(pendenciesOnly=false){
  return out;
 }
 
+function profitDetails(){
+ if(!E.profitBreakdown)return card('<p>Detalhamento indisponível nesta versão.</p>');
+ const d=E.profitBreakdown(S,ui.owner,ui.period);
+ const buyer=x=>x.owner==='spouse'?'Jessica':'Samuel';
+ const fmtDate=x=>E.dateBR(x);
+ const details=(label,rows)=>'<details class="mt7-card" style="padding:16px;margin-top:12px"><summary style="cursor:pointer;font-weight:700">'+esc(label)+'</summary>'+rows+'</details>';
+ const line=(title,small,amount)=>'<div class="mt7-row"><span class="info"><b>'+esc(title)+'</b><small>'+esc(small)+'</small></span><span class="price"><strong>'+esc(amount)+'</strong></span></div>';
+ const saleRows=d.assets.map(g=>{
+  const sales=g.sales.map(x=>line(fmtDate(x.date)+' · '+fmt(x.qty)+' un.',buyer(x.owner)+' · Venda '+money(x.gross)+' · Custo '+(x.cost===null?'não confirmado':money(x.cost))+' · '+x.source,
+    x.recognized?money(x.profit):'Não calculado')).join('');
+  const purchaseRows=g.purchases.length?g.purchases.map(x=>line(fmtDate(x.date)+' · Compra '+fmt(x.qty)+' un.',
+    buyer(x.owner)+' · '+(x.broker||'Corretora não informada'),money(x.total))).join(''):
+    '<p class="mt7-footnote">Nenhuma compra anterior encontrada nos arquivos. O custo conciliado pode ter origem em documento externo ou evento societário.</p>';
+  return details(g.code+' · '+buyer(g.owner)+' · '+g.sales.length+' venda(s) · Resultado '+money(g.profit),
+   '<p><b>Valor vendido:</b> '+money(g.gross)+' · <b>Custo atribuído:</b> '+money(g.cost)+' · <b>Lucro/prejuízo:</b> '+money(g.profit)+'</p>'+
+   '<h3>Vendas que compõem o resultado</h3>'+sales+
+   '<h3>Compras históricas relacionadas</h3><p class="mt7-footnote">Compras registradas até a última venda deste ativo. O cálculo usa custo médio e eventos societários, não seleção direta de lotes. A lista pode conter compras já consumidas em vendas anteriores.</p>'+purchaseRows);
+ }).join('');
+ const payouts=d.payouts.map(x=>line(fmtDate(x.date)+' · '+x.code,buyer(x.owner)+' · '+x.type,money(x.amount))).join('');
+ return card(titlebar('De onde veio o resultado do período')+
+  '<p>Lucro das vendas: <b>'+money(d.realized)+'</b> · Proventos: <b>'+money(d.dividends)+'</b> · Total realizado: <b>'+money(d.realized+d.dividends)+'</b>.</p>'+
+  '<p>'+d.sales.length+' venda(s), '+d.payouts.length+' crédito(s) e '+d.excluded+' venda(s) não apurada(s). Tudo atualizado conforme o titular e o período selecionados.</p>')+
+  (saleRows||card('<p>Não houve vendas neste período.</p>'))+
+  details('Proventos recebidos · '+d.payouts.length+' lançamentos · '+money(d.dividends),
+    payouts||'<p>Não houve proventos neste período.</p>')+
+  card('<p class="mt7-footnote">Este detalhamento soma operações realizadas. Em “Todos”, o lucro total da tela pode incluir também valorização em aberto, apresentada separadamente acima. Valores brutos, antes de taxas e impostos não identificados.</p>');
+}
 function profit(){
  const p=E.portfolio(S,ui.owner),g=E.gains(S,ui.owner,ui.period);
- return profitSummary(g)+reconciliationCard()+
+ return profitSummary(g)+profitDetails()+reconciliationCard()+
  '<div class="mt7-cards3">'+stat('Lucro nas vendas',money(g.realized),g.sales+' vendas com custo comprovado')+
  stat('Proventos identificados',money(g.dividends),g.payments+' créditos','income')+
  stat('Valorização em aberto',ui.period==='all'?(g.openGain===null?'—':money(g.openGain)):'Não incluída',ui.period==='all'?g.matched+' de '+g.positions+' posições':'Sem preços históricos comparáveis')+
