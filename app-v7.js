@@ -83,8 +83,8 @@ function holdingsRows(p,limit=7){
  return holdings.length?holdings.map(h=>'<button type="button" class="mt7-row" data-asset="'+esc(h.owner+'|'+h.code)+'">'+
  '<span class="mt7-symbol">'+esc(h.group==='Tesouro'?'TD':h.code.slice(0,2))+'</span>'+
  '<span class="info"><b>'+esc(h.product||h.code)+'</b><small>'+esc(h.owner==='me'?'Minha':'Esposa')+
- ' · '+esc(h.group)+' · '+fmt(h.qty)+' un.</small></span><span class="price"><strong>'+money(h.value)+'</strong>'+
- '<small>'+(h.origin==='estimated'?'Custo histórico':h.origin==='quote'?'Cotação consultada':'Posição B3')+'</small></span></button>').join(''):
+ ' · '+esc(h.group)+(h.fixedIncome?' · Saldo nominal (sem juros)':' · '+fmt(h.qty)+' un.')+'</small></span><span class="price"><strong>'+money(h.value)+'</strong>'+
+ '<small>'+(h.fixedIncome?'Lançamentos informados':h.origin==='estimated'?'Custo histórico':h.origin==='quote'?'Cotação consultada':'Posição B3')+'</small></span></button>').join(''):
  '<div class="mt7-chartempty">Nenhuma posição encontrada. Abra Importar e selecione os arquivos da B3.</div>';
 }
 function allocation(p){
@@ -174,6 +174,15 @@ function home(){
  '<div class="mt7-actionrow"><button type="button" class="mt7-btn secondary" data-nav="needs">Analisar pendências</button></div>'+
  '<div class="mt7-actionrow"><button class="mt7-btn" data-nav="profit">Ver vendas por classe e lucro/prejuízo</button><button class="mt7-btn" data-nav="import">Importar B3</button<button class="mt7-btn secondary" data-nav="income">Proventos</button><button class="mt7-btn ghost" data-nav="insights">Análises</button></div>';
 }
+function fixedIncomePanel(){
+ const entries=(S.fixedIncomeTransactions||[]).filter(t=>ui.owner==='family'||t.owner===ui.owner).slice().sort((a,b)=>b.date.localeCompare(a.date));
+ if(!entries.length)return '';
+ const total=entries.reduce((n,t)=>n+(t.operation==='sell'?-Number(t.amount):Number(t.amount)),0);
+ return card(titlebar('Renda fixa · lançamentos informados')+
+ '<p>Saldo líquido das aplicações e resgates: <b>'+money(total)+'</b>. Não inclui juros, impostos ou valor atualizado. Fonte: '+esc(entries[0].source||'Informada')+'.</p>'+
+ entries.map(t=>'<div class="mt7-row"><span class="mt7-symbol">'+(t.operation==='sell'?'↙':'↗')+'</span><span class="info"><b>'+esc(t.product||t.assetCode)+'</b><small>'+E.dateBR(t.date)+' · '+esc(t.operation==='sell'?'Resgate':'Aplicação')+' · '+esc(t.rate||'')+' · '+esc(t.maturity||'')+'</small></span><span class="price"><strong>'+money(t.amount)+'</strong><small>'+esc(ownerName(t.owner))+'</small></span></div>').join('')+
+ '<div class="mt7-actionrow"><button type="button" data-nav="history" class="mt7-btn secondary">Ver histórico completo</button></div>');
+}
 function portfolio(){
  const p=E.portfolio(S,ui.owner);
  let rows=p.holdings.filter(h=>ui.category==='all'||h.group===ui.category);
@@ -186,7 +195,7 @@ function portfolio(){
  '<div class="mt7-filter">'+categories.map(c=>'<button type="button" data-category="'+esc(c)+'" class="'+(ui.category===c?'active':'')+'">'+(c==='all'?'Todos':esc(c))+'</button>').join('')+'</div>'+
  '<input type="search" id="mt7-search" class="mt7-input" placeholder="Buscar ativo ou instituição" value="'+esc(ui.search)+'" aria-label="Buscar ativo">'+
  '<div style="margin-top:10px">'+(rows.length?rows.map(h=>holdingsRows({holdings:[h]},1)).join(''):'<div class="mt7-chartempty">Nenhuma posição encontrada.</div>')+'</div>')+
- '<div class="mt7-actionrow"><button class="mt7-btn secondary" data-nav="import">Atualizar Posição B3</button><button class="mt7-btn ghost" data-nav="quotes">Cotações</button></div>';
+ '<div class="mt7-actionrow"><button class="mt7-btn secondary" data-nav="import">Atualizar Posição B3</button><button class="mt7-btn ghost" data-nav="quotes">Cotações</button></div>'+fixedIncomePanel();
 }
 
 function reconciliationCard(pendenciesOnly=false){
@@ -353,6 +362,15 @@ function income(){
 function asset(){
  const p=E.portfolio(S,ui.owner),item=p.holdings.find(x=>x.owner+'|'+x.code===ui.assetKey);
  if(!item)return card('<h2>Ativo não encontrado</h2><button class="mt7-btn" data-nav="portfolio">Voltar à carteira</button>');
+ if(item.fixedIncome){
+  const tx=(S.fixedIncomeTransactions||[]).filter(t=>t.owner===item.owner&&t.assetCode===item.code).slice().sort((a,b)=>b.date.localeCompare(a.date));
+  return '<button class="mt7-smalllink" data-nav="portfolio">‹ Voltar à carteira</button>'+
+  '<section class="mt7-hero"><small>'+esc(ownerName(item.owner))+' · Renda fixa</small><h2>'+esc(item.product)+'</h2><div class="mt7-herometa"><span>'+money(item.value)+' saldo nominal líquido</span><span>'+esc(item.rate||'Taxa não informada')+'</span></div></section>'+
+  card(titlebar('Condições da aplicação')+'<p><b>Vencimento:</b> '+esc(item.maturity||'Não informado')+' · <b>Instituição:</b> '+esc(item.institution||'Não informada')+'</p>'+
+  '<p class="mt7-footnote">O saldo é a soma de compras menos resgates informados. Não representa o valor atualizado, pois a captura não mostra rendimentos apropriados.</p>')+
+  card(titlebar('Operações ('+tx.length+')')+
+  tx.map(t=>'<div class="mt7-row"><span class="info"><b>'+esc(t.operation==='sell'?'Resgate':'Aplicação')+'</b><small>'+E.dateBR(t.date)+' · '+esc(t.source||'')+'</small></span><span class="price"><strong>'+money(t.amount)+'</strong></span></div>').join(''));
+ }
  const rows=S.records.filter(r=>r.owner===item.owner&&(
  r.t==='trade'?E.codeOf(r.v[5])===E.codeOf(item.code):E.codeOf(String(r.v[3]).split(' - ')[0])===E.codeOf(item.code)
  )).sort((a,b)=>E.recordDate(b).localeCompare(E.recordDate(a)));
@@ -443,16 +461,21 @@ function needs(){
  '<button class="mt7-btn" data-nav="import">Ir para importação</button>';
 }
 function history(){
- const rows=S.records.filter(r=>(ui.owner==='family'||r.owner===ui.owner)&&(ui.historyKind==='all'||r.t===ui.historyKind))
+ const raw=S.records.filter(r=>(ui.owner==='family'||r.owner===ui.owner)&&(ui.historyKind==='all'||r.t===ui.historyKind))
  .filter(r=>!ui.search||r.v.map(String).join(' ').toUpperCase().includes(ui.search.toUpperCase()))
- .slice().sort((a,b)=>E.recordDate(b).localeCompare(E.recordDate(a)));
+ .map(r=>({date:E.recordDate(r),html:'<div class="mt7-row"><span class="mt7-symbol">'+(r.t==='trade'?'⇄':'↓')+'</span>'+
+ '<span class="info"><b>'+esc(r.t==='trade'?r.v[5]:r.v[3])+'</b><small>'+esc(ownerName(r.owner))+' · '+E.dateBR(E.recordDate(r))+' · '+esc(r.t==='trade'?r.v[1]:r.v[2])+'</small></span>'+
+ '<span class="price"><strong>'+money(num(r.v[r.t==='trade'?8:7]))+'</strong></span></div>'}));
+ const fixed=(ui.historyKind==='all'||ui.historyKind==='fixed'?(S.fixedIncomeTransactions||[]):[])
+ .filter(t=>ui.owner==='family'||t.owner===ui.owner)
+ .filter(t=>!ui.search||[t.product,t.assetCode,t.institution,t.date].join(' ').toUpperCase().includes(ui.search.toUpperCase()))
+ .map(t=>({date:t.date,html:'<div class="mt7-row"><span class="mt7-symbol">RF</span><span class="info"><b>'+esc(t.product)+'</b><small>'+esc(ownerName(t.owner))+' · '+E.dateBR(t.date)+' · '+(t.operation==='sell'?'Resgate':'Aplicação')+' · '+esc(t.rate)+'</small></span><span class="price"><strong>'+money(t.amount)+'</strong><small>Informado manualmente</small></span></div>'}));
+ const rows=raw.concat(fixed).sort((a,b)=>b.date.localeCompare(a.date));
  return card(titlebar('Histórico de registros')+
- '<div class="mt7-filter">'+[['all','Todos'],['trade','Negociações'],['mov','Movimentações']].map(([v,t])=>'<button data-history-kind="'+v+'" class="'+(ui.historyKind===v?'active':'')+'">'+t+'</button>').join('')+'</div>'+
- '<input type="search" id="mt7-search" class="mt7-input" placeholder="Buscar código, instituição ou data" value="'+esc(ui.search)+'">'+
+ '<div class="mt7-filter">'+[['all','Todos'],['trade','Negociações B3'],['mov','Movimentações B3'],['fixed','Renda fixa']].map(([v,t])=>'<button data-history-kind="'+v+'" class="'+(ui.historyKind===v?'active':'')+'">'+t+'</button>').join('')+'</div>'+
+ '<input type="search" id="mt7-search" class="mt7-input" placeholder="Buscar ativo, banco ou data" value="'+esc(ui.search)+'">'+
  '<p>'+rows.length+' registros encontrados.</p>'+
- rows.slice(0,ui.historyLimit).map(r=>'<div class="mt7-row"><span class="mt7-symbol">'+(r.t==='trade'?'⇄':'↓')+'</span>'+
- '<span class="info"><b>'+esc(r.t==='trade'?r.v[5]:r.v[3])+'</b><small>'+esc(r.owner==='spouse'?'Esposa':'Minha')+' · '+E.dateBR(E.recordDate(r))+' · '+esc(r.t==='trade'?r.v[1]:r.v[2])+'</small></span>'+
- '<span class="price"><strong>'+money(num(r.v[r.t==='trade'?8:7]))+'</strong></span></div>').join('')+
+ rows.slice(0,ui.historyLimit).map(x=>x.html).join('')+
  (rows.length>ui.historyLimit?'<button class="mt7-btn secondary" data-action="more-history">Carregar mais</button>':''));
 }
 function insights(){
