@@ -177,10 +177,16 @@ E.profitBreakdown=function(state,owner='family',period='all',today=E.isoNow()){
  const raw=[...E.ledger(state,owner).sales,...E.treasuryLedger(state,owner).sales]
    .filter(x=>x.date>=from&&x.date<=today);
  const sales=raw.map(x=>{
-   const v=a.overrides.get(x),recognized=v?v.recognized:x.recognized;
-   const profit=v?v.profit:x.profit;
-   return {...x,recognized,profit,cost:recognized&&Number.isFinite(profit)?rounded(x.gross-profit):null,
-    source:v?'Custo conciliado':(recognized?'Custo médio do histórico':'Custo não verificado')};
+   const v=a.overrides.get(x);
+   const row=v?{...x,...v}:x;
+   const partial=(state?.reconciliation?.mePartialSales||[]).find(p=>
+    p.owner===row.owner&&p.date===row.date&&p.code===E.codeOf(row.code)&&
+    Math.abs(Number(p.qty)-row.qty)<0.0000001&&
+    Math.abs(Number(p.gross)-row.gross)<0.02&&p.status==='CALCULAVEL_BRUTO');
+   const verifiedPartial=partial&&row.recognized&&Number.isFinite(Number(partial.basis));
+   const profit=verifiedPartial?Number(partial.gross)-Number(partial.basis):row.profit;
+   return {...row,profit,cost:row.recognized&&Number.isFinite(profit)?rounded(row.gross-profit):null,
+    source:verifiedPartial?'Custo individual auditado':(v?'Custo conciliado':(row.recognized?'Custo médio do histórico':'Custo não verificado'))};
  }).sort((x,y)=>y.date.localeCompare(x.date)||x.code.localeCompare(y.code));
  const purchases=(state.records||[]).filter(r=>owners.includes(r.owner||'me')&&
    ((r.t==='trade'&&String(r.v[1]).toLowerCase()==='compra')||
