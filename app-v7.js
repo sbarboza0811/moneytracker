@@ -104,6 +104,31 @@ function monthlyChart(g){
  '<text x="'+(width-pad)+'" y="'+(height-3)+'" text-anchor="end" font-size="11" fill="#7b9282">'+esc(values.at(-1).label)+'</text></svg>'+
  '<p class="mt7-footnote">Evolução acumulada das vendas conciliadas e proventos. Não é o gráfico do patrimônio total.</p>';
 }
+function evolutionChart(owner){
+ const list=Array.isArray(S.positionHistory)?S.positionHistory.slice():[];
+ for(const [o,field] of [['me','positionSnapshot'],['spouse','spousePositionSnapshot']]){
+  const p=S[field];if(p?.rows?.length&&!list.some(x=>x.owner===o&&x.date===p.date))list.push({owner:o,date:p.date,total:+p.total||0});
+ }
+ const selected=owner==='family'?['me','spouse']:[owner],dated=list.filter(x=>selected.includes(x.owner)&&/^\d{4}-\d\d-\d\d$/.test(x.date)&&Number.isFinite(+x.total));
+ const points=[];
+ for(const date of [...new Set(dated.map(x=>x.date))].sort()){
+  let total=0,known=0;
+  for(const o of selected){
+   const previous=dated.filter(x=>x.owner===o&&x.date<=date).sort((a,b)=>a.date.localeCompare(b.date)).at(-1);
+   if(previous){total+=+previous.total;known++;}
+  }
+  if(known===selected.length)points.push({date,total});
+ }
+ if(points.length<2)return '<div class="mt7-chartempty">Ainda não há duas posições B3 comparáveis em datas diferentes. Baixe novamente a Posição B3 nas próximas atualizações. O aplicativo não criará um gráfico fictício.</div>';
+ const w=620,h=185,p=24,values=points.map(x=>x.total),low=Math.min(...values),high=Math.max(...values),span=Math.max(1,high-low),
+ px=i=>p+(w-2*p)*i/(points.length-1),py=v=>h-p-(v-low)/span*(h-2*p);
+ return '<svg class="mt7-chart" viewBox="0 0 '+w+' '+h+'" role="img" aria-label="Patrimônio nas datas de posições B3">'+
+ '<polyline class="gain" points="'+points.map((d,i)=>px(i).toFixed(1)+','+py(d.total).toFixed(1)).join(' ')+'"/>'+
+ points.map((d,i)=>'<circle cx="'+px(i).toFixed(1)+'" cy="'+py(d.total).toFixed(1)+'" r="4" fill="#118460"><title>'+E.dateBR(d.date)+' · '+money(d.total)+'</title></circle>').join('')+
+ '<text x="'+p+'" y="'+(h-2)+'" font-size="11" fill="#82948b">'+E.dateBR(points[0].date)+'</text>'+
+ '<text x="'+(w-p)+'" y="'+(h-2)+'" text-anchor="end" font-size="11" fill="#82948b">'+E.dateBR(points.at(-1).date)+'</text></svg>'+
+ '<p class="mt7-footnote">Patrimônio informado nos relatórios B3. A variação inclui novos aportes e retiradas: não é rentabilidade.</p>';
+}
 function home(){
  const p=E.portfolio(S,ui.owner),g=E.gains(S,ui.owner,ui.period);
  const needs=E.gaps(S,ui.owner).filter(i=>i.level==='critical');
@@ -115,6 +140,7 @@ function home(){
  '<div class="mt7-col2">'+
  card(titlebar('Onde está investido','portfolio')+allocation(p))+
  card(titlebar('Principais posições','portfolio')+holdingsRows(p,5))+'</div>'+
+ card(titlebar('Evolução patrimonial','profit')+evolutionChart(ui.owner))+
  card(titlebar('Evolução do resultado','profit')+monthlyChart(g))+
  (needs.length?'<div class="mt7-note warning"><strong>'+needs.length+' pendência(s) importante(s) para conferir seus dados.</strong> O aplicativo mostra exatamente o que buscar na B3. <button data-nav="needs">Ver pendências ›</button></div>':'')+
  '<div class="mt7-actionrow"><button class="mt7-btn" data-nav="import">Importar B3</button><button class="mt7-btn secondary" data-nav="income">Proventos</button><button class="mt7-btn ghost" data-nav="insights">Análises</button></div>';
@@ -141,6 +167,7 @@ function profit(){
  stat('Valorização em aberto',ui.period==='all'?(g.openGain===null?'—':money(g.openGain)):'Não apurada',ui.period==='all'?g.matched+' de '+g.positions+' posições':'Faltam cotações históricas')+
  stat('Capital investido · posição',money(g.capitalInvested),p.valuation==='mixed'?'Consolidado indicativo':'Total atual das posições','portfolio')+'</div>'+
  card(titlebar('Gráfico de lucro ao longo do período')+monthlyChart(g))+
+ card(titlebar('Evolução do patrimônio')+evolutionChart(ui.owner))+
  card(titlebar('Como o lucro é calculado')+
  '<p><b>Vendas:</b> valor de venda menos custo médio das unidades vendidas. Ganhos de investimentos já encerrados continuam acumulados.</p>'+
  '<p><b>Proventos:</b> créditos identificados como dividendos, juros sobre capital próprio e rendimentos na B3.</p>'+
