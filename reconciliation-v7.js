@@ -90,6 +90,7 @@ E.gaps=function(state,owner='family',today=E.isoNow()){
    const led=E.ledger(state,'spouse'),port=E.portfolio(state,'spouse');
    const pend=port.holdings.filter(h=>{
     if(h.value===0&&/^[A-Z]{4}1[23]$/.test(E.codeOf(h.code)))return false;
+    if(h.code==='BTHF11'&&state?.reconciliation?.positionBasis?.BTHF11?.owner==='spouse'&&Number(state.reconciliation.positionBasis.BTHF11.qty)===h.qty)return false;
     if(h.group==='Tesouro')return !(h.applied>0);
     const b=led.stocks.get('spouse|'+E.codeOf(h.code));
     return !(b&&!b.uncertain&&b.qty>0&&Math.abs(b.qty-h.qty)<=Math.max(.00001,.002*h.qty));
