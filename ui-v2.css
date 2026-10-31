@@ -150,3 +150,6 @@ body .toast{right:15px!important;left:15px!important;bottom:90px!important;max-w
 .v5source .v5sourcerows strong{display:block;font-size:clamp(15px,2vw,20px);overflow-wrap:anywhere}
 .v5source p{line-height:1.65;font-size:13px;color:#466858;margin-bottom:16px}
 @media(max-width:390px){.v5source .v5sourcerows{grid-template-columns:1fr}}
+
+/* Automatic results: informational labels remain visible on small screens. */
+.v6finance-label{font-size:12px;color:#557267;font-weight:650}
