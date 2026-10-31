@@ -169,4 +169,46 @@ E.gains=function(state,owner='family',period='all',today=E.isoNow()){
   reconciliationVerified:a.verified,reconciliationProvisional:a.provisional,
   reconciliationIncomplete:a.incomplete,reconciliationUnmatched:a.unmatched};
 };
+
+/* Detalhamento sempre derivado da importação corrente e dos custos conciliados.
+   Compras são fontes do custo médio, não lotes FIFO específicos. */
+E.profitBreakdown=function(state,owner='family',period='all',today=E.isoNow()){
+ const owners=ownerSet(owner),from=E.cutoff(period,today),a=audit(state,owner,period,today);
+ const raw=[...E.ledger(state,owner).sales,...E.treasuryLedger(state,owner).sales]
+   .filter(x=>x.date>=from&&x.date<=today);
+ const sales=raw.map(x=>{
+   const v=a.overrides.get(x),recognized=v?v.recognized:x.recognized;
+   const profit=v?v.profit:x.profit;
+   return {...x,recognized,profit,cost:recognized&&Number.isFinite(profit)?rounded(x.gross-profit):null,
+    source:v?'Custo conciliado':(recognized?'Custo médio do histórico':'Custo não verificado')};
+ }).sort((x,y)=>y.date.localeCompare(x.date)||x.code.localeCompare(y.code));
+ const purchases=(state.records||[]).filter(r=>owners.includes(r.owner||'me')&&
+   ((r.t==='trade'&&String(r.v[1]).toLowerCase()==='compra')||
+    (r.t==='mov'&&String(r.v[2]).toLowerCase()==='compra'&&String(r.v[0]).toLowerCase()==='credito')))
+   .map(r=>({owner:r.owner||'me',code:E.codeOf(r.t==='trade'?r.v[5]:String(r.v[3]).split(' - ')[0]),
+    date:E.recordDate(r),qty:E.number(r.v[r.t==='trade'?6:5]),total:E.number(r.v[r.t==='trade'?8:7]),
+    broker:String(r.v[4]||''),source:r.source||''})).filter(x=>x.date&&x.date<=today&&x.qty>0&&Number.isFinite(x.total));
+ const purchasesByCode=new Map();
+ for(const p of purchases){const key=p.owner+'|'+p.code;if(!purchasesByCode.has(key))purchasesByCode.set(key,[]);purchasesByCode.get(key).push(p);}
+ for(const list of purchasesByCode.values())list.sort((x,y)=>y.date.localeCompare(x.date));
+ const payouts=E.dividendRows(state,owner).filter(x=>x.date>=from&&x.date<=today)
+  .sort((x,y)=>y.date.localeCompare(x.date)||x.code.localeCompare(y.code));
+ const byAsset=new Map();
+ for(const x of sales){
+  const key=x.owner+'|'+x.code;
+  if(!byAsset.has(key))byAsset.set(key,{owner:x.owner,code:x.code,qtySold:0,gross:0,cost:0,profit:0,sales:[],purchases:[]});
+  const g=byAsset.get(key);g.qtySold+=x.qty;g.gross+=x.gross;g.cost+=x.cost||0;g.profit+=x.profit||0;g.sales.push(x);
+ }
+ for(const [key,g] of byAsset){
+  const lastSale=g.sales.reduce((date,x)=>x.date>date?x.date:date,'');
+  g.purchases=(purchasesByCode.get(key)||[]).filter(x=>x.date<=lastSale);
+  g.hasUnverified=g.sales.some(x=>!x.recognized);
+  g.gross=rounded(g.gross);g.cost=rounded(g.cost);g.profit=rounded(g.profit);
+ }
+ return{from,to:today,assets:[...byAsset.values()].sort((x,y)=>y.sales[0].date.localeCompare(x.sales[0].date)),
+  sales,payouts,realized:rounded(sales.reduce((n,x)=>n+(Number.isFinite(x.profit)?x.profit:0),0)),
+  dividends:rounded(payouts.reduce((n,x)=>n+x.amount,0)),
+  excluded:sales.filter(x=>!x.recognized).length};
+};
+
 })(window);
