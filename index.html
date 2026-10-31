@@ -290,7 +290,7 @@ const t=ui.kind||'trade';let records=groupRecords(t).filter(x=>!ui.search||norm(
 return `<div class="v2summary"><div class="v2stat"><small>Negociações</small><strong>${D.counts.trade}</strong></div><div class="v2stat"><small>Movimentações</small><strong>${D.counts.mov}</strong></div><div class="v2stat"><small>Total</small><strong>${S.records.length}</strong></div></div><section class="v2panel"><div class="v2section"><h2>Pesquisar</h2><button data-page="files">Importar ›</button></div><div class="v2filter"><button data-kind="trade" class="${t==='trade'?'selected':''}">Negociações</button><button data-kind="mov" class="${t==='mov'?'selected':''}">Movimentações</button></div><input class="v2field" style="margin-top:12px" id="search" placeholder="Buscar ativo ou data" value="${h(ui.search)}"></section><section class="v2panel"><div class="v2section"><h2>Atividade</h2><span class="v2chip">${records.length} registros</span></div><div class="v2list">${records.slice(0,ui.pageLimit||80).map(r=>`<div class="v2row"><span class="v2bubble">${t==='trade'?'⇄':'◷'}</span><span class="v2rowinfo"><b>${h(r.v[t==='trade'?5:3])}</b><small>${h(r.v[t==='trade'?1:2])} · ${v2date(dateOf(r))}</small></span><span class="v2rowright"><strong>${money(num(r.v[t==='trade'?8:7]))}</strong><small><button class="muted-link" data-edit="${h(r.id)}">Editar</button></small></span></div>`).join('')||'<div class="v2empty">Nenhum registro.</div>'}</div>${records.length>(ui.pageLimit||80)?'<button class="v2btn outline" data-act="show-more">Mostrar mais</button>':''}</section><div class="v2quick"><button class="v2btn" data-act="add-trade">＋ Negociação</button><button class="v2btn outline" data-act="add-mov">＋ Movimentação</button></div>`;
 }
 function v2more(D){
-return `<section class="v2panel"><div class="v2section"><h2>Minha conta</h2><span class="v2chip">Privada</span></div><div class="v2row"><span class="v2bubble">S</span><span class="v2rowinfo"><b>MoneyTracker pessoal</b><small>Sincronização e saída nos controles acima</small></span></div></section><section class="v2panel"><div class="v2section"><h2>Investimentos</h2></div>${[['⇧','Importar B3','Posição e histórico','files'],['◷','Histórico','Todos os lançamentos','records'],['◎','Metas','Aportes e patrimônio-alvo','goals'],['▥','Distribuição','Percentuais desejados','strategy'],['◈','Cenários','Comparações hipotéticas','scenarios'],['↗','Resultados','Lucros, aportes e evolução','performance']].map(([ico,title,desc,to])=>`<button class="v2row v2rowbutton" data-page="${to}"><span class="v2bubble">${ico}</span><span class="v2rowinfo"><b>${title}</b><small>${desc}</small></span><b>›</b></button>`).join('')}</section><section class="v2panel"><div class="v2section"><h2>Seus dados</h2></div><div class="v2quick"><button class="v2btn" data-act="backup">Exportar backup</button><button class="v2btn outline" data-act="import-backup">Restaurar JSON</button></div><p class="v2note">${nfmt(S.records.length,0)} lançamentos · ${D.active.length} posições.</p></section>`;
+return `<section class="v2panel"><div class="v2section"><h2>Minha conta</h2><span class="v2chip">Privada</span></div><div class="v2row"><span class="v2bubble">S</span><span class="v2rowinfo"><b>MoneyTracker pessoal</b><small>Sincronização e saída nos controles acima</small></span></div></section><section class="v2panel"><div class="v2section"><h2>Investimentos</h2></div>${[['⇧','Importar B3','Posição e histórico','files'],['◷','Histórico','Todos os lançamentos','records'],['◎','Metas','Aportes e patrimônio-alvo','goals'],['▥','Distribuição','Percentuais desejados','strategy'],['◈','Cenários','Comparações hipotéticas','scenarios'],['↗','Resultados','Lucros, aportes e evolução','performance'],['◉','Cotações','Preços por ativo','quotes']].map(([ico,title,desc,to])=>`<button class="v2row v2rowbutton" data-page="${to}"><span class="v2bubble">${ico}</span><span class="v2rowinfo"><b>${title}</b><small>${desc}</small></span><b>›</b></button>`).join('')}</section><section class="v2panel"><div class="v2section"><h2>Seus dados</h2></div><div class="v2quick"><button class="v2btn" data-act="backup">Exportar backup</button><button class="v2btn outline" data-act="import-backup">Restaurar JSON</button></div><p class="v2note">${nfmt(S.records.length,0)} lançamentos · ${D.active.length} posições.</p></section>`;
 }
 function v2goals(D){
 const g=S.goal||{},pr=g.amount?Math.min(100,D.total/g.amount*100):0;
@@ -421,8 +421,36 @@ async function v3benchmarks(){
  ui.benchmark=parts.join('');render();
 }
 
+
+/* Quotes from authenticated Supabase Edge Function; manual entry is labeled. */
+function v3quoteOf(code){const q=S.quotes?.[code];return q&&Number.isFinite(+q.price)&&+q.price>0?q:null;}
+function v3quoteValue(r){const q=v3quoteOf(r.code);return q?{...q,total:Math.round(r.qty*(+q.price)*100)/100}:null;}
+function v3quotes(D){
+ const listed=D.active.filter(r=>r.sourceGroup!=='Tesouro Direto');
+ const known=listed.filter(r=>v3quoteOf(r.code));
+ const estimated=listed.reduce((a,r)=>a+(v3quoteValue(r)?.total??r.cost),0)+D.active.filter(r=>r.sourceGroup==='Tesouro Direto').reduce((a,r)=>a+r.cost,0);
+ return '<section class="v2panel"><div class="v2section"><h2>Cotações consultadas</h2><span class="v2chip">'+known.length+' / '+listed.length+'</span></div><div class="v2value">'+money(estimated)+'</div><p class="v2muted">Estimativa com últimos preços consultados ou informados. Ativos sem cotação usam o valor do último relatório de Posição da B3; não é cotação em tempo real nem saldo bancário.</p><div class="v2callout">Consultas automáticas requerem autorização do provedor brapi para a maioria dos tickers. Não armazenamos a chave no código do aplicativo. O Tesouro Direto continua com o relatório B3.</div></section>'+
+ '<section class="v2panel"><div class="v2section"><h2>Atualizar preço manualmente</h2></div><form id="v3-quote-form" class="v3form"><label>Ativo<select class="v2field" name="symbol" required>'+listed.map(r=>'<option value="'+h(r.code)+'">'+h(r.code)+'</option>').join('')+'</select></label><label>Preço por unidade (R$)<input name="price" class="v2field" type="number" min=".00001" step=".00001" required></label><button type="submit" class="v2btn">Salvar preço manual</button></form></section>'+
+ '<section class="v2panel"><div class="v2section"><h2>Ativos listados</h2><span class="v2muted">B3 x cotação</span></div>'+listed.map(r=>{
+ const q=v3quoteValue(r);
+ return '<div class="v2row"><span class="v2bubble">'+h(r.code.slice(0,2))+'</span><span class="v2rowinfo"><b>'+h(r.code)+'</b><small>'+(q?money(q.price)+' / un. · '+h(q.provider)+' · '+v3date(String(q.at).slice(0,10)):'Posição B3 · sem atualização')+'</small></span><div class="v2rowright"><strong>'+money(q?.total??r.cost)+'</strong><small><button type="button" class="muted-link" data-v3-fetch-quote="'+h(r.code)+'">Consultar</button></small></div></div>';
+ }).join('')+'</section>';
+}
+async function v3fetchQuote(symbol){
+ const fetcher=window.MoneyTrackerCloud?.quote;
+ if(!fetcher){toast('Sincronização de cotações não disponível.',true);return;}
+ const label=String(symbol||'').toUpperCase();
+ toast('Consultando '+label+'...');
+ try{
+  const result=await fetcher(label);
+  if(!S.quotes||typeof S.quotes!=='object')S.quotes={};
+  S.quotes[label]={price:+result.price,at:result.at||new Date().toISOString(),provider:result.provider||'brapi'};
+  save();render();toast(label+': '+money(result.price)+' / un. · '+S.quotes[label].provider);
+ }catch(e){toast((e.message||String(e)).slice(0,240),true);}
+}
+
 function v2render(D){
-const pages={home:v2home,portfolio:v2portfolio,asset:v2asset,income:v2income,ai:v2insights,files:v2files,records:v2records,more:v2more,goals:v2goals,strategy:v2strategy,scenarios:v2scenarios,performance:v3performance};
+const pages={home:v2home,portfolio:v2portfolio,asset:v2asset,income:v2income,ai:v2insights,files:v2files,records:v2records,more:v2more,goals:v2goals,strategy:v2strategy,scenarios:v2scenarios,performance:v3performance,quotes:v3quotes};
 const app=document.getElementById('app'),bar=document.getElementById('mt-cloud-bar');
 app.innerHTML=v2layout((pages[page]||v2home)(D));
 document.body.dataset.page=page;
@@ -525,6 +553,9 @@ async function restoreBackup(file){try{const obj=JSON.parse(await file.text());i
     S={...original(),...obj.data,records,targets:{...TARGET,...obj.data.targets},goal:{...DEFAULT_GOAL,...obj.data.goal}};save();page='home';render();toast('Backup restaurado, sem registros repetidos.');}catch(e){toast('Falha ao restaurar backup: '+e.message,true);}}
 function dispatch(e){
   const ownerClick=e.target.closest('[data-owner]');if(ownerClick){ui.owner=ownerClick.dataset.owner;ui.portfolioFilter='';ui.search='';render();return;}
+  const deleteFlow=e.target.closest('[data-v3-delete-flow]');
+  if(deleteFlow){const id=deleteFlow.dataset.v3DeleteFlow;if(confirm('Excluir este movimento de dinheiro?')){S.cashflows=(S.cashflows||[]).filter(x=>x.id!==id);save();ui.benchmark='';render();toast('Movimento excluído.');}return;}
+  const quoteBtn=e.target.closest('[data-v3-fetch-quote]');if(quoteBtn){v3fetchQuote(quoteBtn.dataset.v3FetchQuote);return;}
   const asset=e.target.closest('[data-asset]');if(asset){ui.selectedAsset=asset.dataset.asset;page='asset';window.scrollTo(0,0);render();return;}
   const cat=e.target.closest('[data-v2-filter]');if(cat){ui.portfolioFilter=cat.dataset.v2Filter;ui.pageLimit=80;render();return;}
   const yr=e.target.closest('[data-income-year]');if(yr){ui.incomeYear=yr.dataset.incomeYear;render();return;}
@@ -535,6 +566,7 @@ function dispatch(e){
   const edit=e.target.closest('[data-edit]');if(edit){const r=S.records.find(x=>x.id===edit.dataset.edit);if(r){ui.modal={t:r.t,id:r.id};renderModal();}return;}
   const del=e.target.closest('[data-delete]');if(del){const r=S.records.find(x=>x.id===del.dataset.delete);if(r&&confirm('Excluir definitivamente este registro?')){S.records=S.records.filter(x=>x.id!==r.id);save();render();toast('Registro excluído.');}return;}
   const a=e.target.closest('[data-act]');if(!a)return;const act=a.dataset.act;
+  if(act==='v3-benchmark'){v3benchmarks();return;}
   if(act==='open-import'){if(ui.owner==='family'){toast('Selecione Minha ou Esposa para importar os dados separados.',true);return;}$('#file-input').click();return;}if(act==='add-trade'||act==='add-mov'){ui.modal={t:act==='add-mov'?'mov':'trade'};renderModal();return;}
   if(act==='close-modal'){ui.modal=null;$('.modal-bg')?.remove();return;}
   if(act==='show-more'){ui.pageLimit+=80;render();return;}
@@ -543,7 +575,34 @@ function dispatch(e){
   if(act==='clear'){if(confirm('Apagar todos os registros do MoneyTracker neste navegador? Esta ação não pode ser desfeita sem backup.')&&confirm('Confirma que deseja excluir TODOS os seus registros?')){S.records=[];S.sources={};save();render();toast('Base esvaziada.');}return;}
 }
 document.addEventListener('click',dispatch);
-document.addEventListener('submit',e=>{if(e.target.id==='record-form'){addManual(e);return;}
+document.addEventListener('submit',e=>{
+  if(e.target.id==='v3-base-form'){
+    e.preventDefault();if(ui.owner==='family')return;
+    const d=new FormData(e.target),date=String(d.get('date')),amount=Number(d.get('amount')),cash=Number(d.get('cash'));
+    if(!/^\d{4}-\d\d-\d\d$/.test(date)||date>new Date().toISOString().slice(0,10)||!Number.isFinite(amount)||amount<0||!Number.isFinite(cash)||cash<0||!d.get('confirmed')){toast('Confira os valores, a data e a confirmação dos aportes.',true);return;}
+    const snap=ui.owner==='spouse'?S.spousePositionSnapshot:S.positionSnapshot;
+    if(snap?.date&&date>snap.date){toast('A data inicial deve ser anterior ou igual à data da posição B3.',true);return;}
+    if(!S.performanceBase)S.performanceBase={};if(!S.cashBalances)S.cashBalances={};
+    S.performanceBase[ui.owner]={date,amount,confirmed:true};S.cashBalances[ui.owner]=cash;
+    ui.benchmark='';save();render();toast('Ponto de partida salvo.');return;
+  }
+  if(e.target.id==='v3-flow-form'){
+    e.preventDefault();if(ui.owner==='family')return;
+    const d=new FormData(e.target),type=String(d.get('type')),date=String(d.get('date')),amount=Number(d.get('amount'));
+    if(!['deposit','withdraw','transfer'].includes(type)||!/^\d{4}-\d\d-\d\d$/.test(date)||date>new Date().toISOString().slice(0,10)||!Number.isFinite(amount)||amount<=0){toast('Informe um movimento válido.',true);return;}
+    if(!Array.isArray(S.cashflows))S.cashflows=[];
+    const toOwner=type==='transfer'&&d.get('toOwner')==='spouse'?'spouse':type==='transfer'&&d.get('toOwner')==='me'?'me':ui.owner;
+    S.cashflows.push({id:uid(),owner:ui.owner,toOwner,type,date,amount,from:txt(d.get('from')).slice(0,80),to:txt(d.get('to')).slice(0,80)});
+    ui.benchmark='';save();render();toast('Movimento registrado.');return;
+  }
+  if(e.target.id==='v3-quote-form'){
+    e.preventDefault();const d=new FormData(e.target),symbol=String(d.get('symbol')||''),price=Number(d.get('price'));
+    if(!/^[A-Z0-9]{4,15}$/.test(symbol)||!Number.isFinite(price)||price<=0){toast('Código ou preço inválido.',true);return;}
+    if(!S.quotes||typeof S.quotes!=='object')S.quotes={};
+    S.quotes[symbol]={price,at:new Date().toISOString(),provider:'Informado manualmente'};
+    save();render();toast('Cotação manual salva.');return;
+  }
+  if(e.target.id==='record-form'){addManual(e);return;}
   if(e.target.id==='target-form'){e.preventDefault();const d=new FormData(e.target),t={};for(const c of CATS)t[c.id]=Number(d.get(c.id)||0);const tot=Object.values(t).reduce((a,b)=>a+b,0);if(Math.abs(tot-100)>.01){toast('A distribuição precisa somar exatamente 100%. Soma atual: '+nfmt(tot,1)+'%.',true);return;}S.targets=t;save();render();toast('Distribuição-alvo atualizada.');return;}
   if(e.target.id==='goal-form'){e.preventDefault();const d=new FormData(e.target);S.goal={name:txt(d.get('name')),amount:Number(d.get('amount')),months:Number(d.get('months')),monthly:Number(d.get('monthly')),profile:txt(d.get('profile'))};save();render();toast('Objetivo atualizado.');return;}
 });
