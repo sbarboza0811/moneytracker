@@ -214,7 +214,7 @@ function coverageAudit(){
  }
  const missingMov=Array.from({length:last-first+1},(_,i)=>first+i).filter(y=>!mYears.has(String(y)));
  const missingTrade=Array.from({length:last-first+1},(_,i)=>first+i).filter(y=>!nYears.has(String(y)));
- return `<section class="card"><div class="section"><h2>Conferência da cobertura histórica</h2><span class="chip amber">Verificar períodos</span></div><p class="small muted">Tabela montada com as datas dos registros efetivamente importados. Um ano sem lançamentos pode indicar ausência de operações ou um arquivo ainda não enviado; não comprova erro na importação.</p><div class="table-scroll"><table class="data-table"><thead><tr><th>Ano</th><th class="num">Negociações</th><th class="num">Movimentações</th><th>Diagnóstico</th></tr></thead><tbody>${rows.join('')}</tbody></table></div><div class="notice" style="margin-top:15px"><b>A conferir na B3:</b> ${missingTrade.length?'Negociação: '+missingTrade.join(', ')+'. ':''}${missingMov.length?'Movimentação: '+missingMov.join(', ')+'. ':''}Para identificar o valor atual da carteira, é necessário também o extrato de <b>Posição</b>, pois negócios antigos não trazem cotação de hoje.</div><p class="help">Desdobramentos, bonificações, transferências e incorporação podem alterar quantidades sem aparecerem como compras e vendas; o cálculo atual não reconcilia esses eventos.</p></section>`;
+ return `<section class="card"><div class="section"><h2>Conferência da cobertura histórica</h2><span class="chip amber">Verificar períodos</span></div><p class="small muted">Tabela montada com as datas dos registros efetivamente importados. Um ano sem lançamentos pode indicar ausência de operações ou um arquivo ainda não enviado; não comprova erro na importação.</p><div class="table-scroll"><table class="data-table"><thead><tr><th>Ano</th><th class="num">Negociações</th><th class="num">Movimentações</th><th>Diagnóstico</th></tr></thead><tbody>${rows.join('')}</tbody></table></div><div class="notice" style="margin-top:15px"><b>A conferir na B3:</b> ${missingTrade.length?'Negociação: '+missingTrade.join(', ')+'. ':''}${missingMov.length?'Movimentação: '+missingMov.join(', ')+'. ':''}${S.positionSnapshot?.rows?.length?'A posição já foi importada: o patrimônio é calculado pelo relatório de Posição, não pela soma de negociações.':'Para atualizar o patrimônio, importe o relatório de Posição B3.'}</div><p class="help">Desdobramentos, bonificações, transferências e incorporação podem alterar quantidades sem aparecerem como compras e vendas; o cálculo atual não reconcilia esses eventos.</p></section>`;
 }
 function coverageFlag(){
  const tr=S.records.filter(r=>r.t==='trade'),mv=S.records.filter(r=>r.t==='mov');
@@ -224,25 +224,84 @@ function coverageFlag(){
  const yr=lastMov.slice(0,4);
  return `<div class="notice"><b>Cobertura incompleta:</b> o último registro de movimentação importado é de ${yr}, enquanto as negociações seguem até ${lastTrade.slice(0,4)}. Rendimentos, dividendos e eventos posteriores podem faltar. <button class="muted-link" data-page="files">Ver anos e importar →</button></div>`;
 }
-function filesPage(){const sources=Object.entries(S.sources||{}),tCount=groupRecords('trade').length,mCount=groupRecords('mov').length;return `<div class="stack">${coverageAudit()}${box(`<div class="section"><h2>Importar arquivos da B3</h2><span class="chip">XLSX · até 20 MB</span></div><div class="uploader" id="drop-zone"><div class="large">⇧</div><h3>Selecione ou arraste suas planilhas</h3><p>Negociação (9 colunas) e Movimentação (8 colunas). Pode importar vários arquivos e repetir períodos: duplicidades exatas serão bloqueadas.</p><button class="btn" data-act="open-import">Selecionar arquivos .xlsx</button></div><div class="notice good" style="margin-top:15px"><b>Deduplicação automática:</b> compara todos os campos do tipo correspondente, inclusive data, instituição, quantidade, preço, valor e ativo. Um registro idêntico já existente não entra novamente.</div>${ui.report?`<div class="sheet-detail" style="margin-top:15px;white-space:pre-wrap">${h(ui.report)}</div>`:''}`)}<div class="grid g2">${box(`<div class="section"><h2>Exportar negociação</h2><span class="chip">${nfmt(tCount,0)} registros</span></div><p class="small muted">Gera Excel com aba <b>Negociação</b> e as mesmas 9 colunas dos arquivos que você enviou, incluindo lançamentos manuais.</p><button class="btn" data-act="export-trade">⇩ Exportar negociação.xlsx</button>`)}${box(`<div class="section"><h2>Exportar movimentação</h2><span class="chip">${nfmt(mCount,0)} registros</span></div><p class="small muted">Gera Excel com aba <b>Movimentação</b> e as mesmas 8 colunas dos arquivos originais, incluindo lançamentos manuais.</p><button class="btn" data-act="export-mov">⇩ Exportar movimentacao.xlsx</button>`)}</div>${box(`<div class="section"><h2>Arquivos incorporados na criação</h2><span class="chip gray">${sources.length} arquivos</span></div><div class="list">${sources.map(([f,v])=>`<div class="statrow"><div style="min-width:0"><div class="name" style="word-break:break-all">${h(f)}</div><div class="desc">${v.type==='trade'?'Negociação':'Movimentação'} · ${v.accepted} incorporados</div></div>${v.skipped?`<span class="chip amber">${v.skipped} repetidos</span>`:'<span class="chip">OK</span>'}</div>`).join('')||'<p class="muted small">Nenhum arquivo listado.</p>'}</div>`)}${box(`<div class="section"><h2>Backup e gerenciamento</h2></div><div class="row wrap"><button class="btn outline" data-act="backup">⇩ Backup completo (.json)</button><button class="btn outline" data-act="import-backup">⇧ Restaurar backup (.json)</button><button class="btn danger" data-act="clear">Apagar registros</button></div><p class="help" style="margin-top:15px">Os Excel exportados seguem o formato de colunas da B3. O JSON salva também metas, classificações e configurações do app. Seus dados ficam no armazenamento local deste navegador; para não perder informações, guarde backups periódicos.</p>`)} </div>`;}
+function filesPage(){const sources=Object.entries(S.sources||{}),tCount=groupRecords('trade').length,mCount=groupRecords('mov').length;return `<div class="stack">${S.positionSnapshot?.rows?.length?box(`<div class="section"><h2>Última posição B3</h2><span class="chip">${S.positionSnapshot.rows.length} posições</span></div><div class="kpi"><div class="num">${money(S.positionSnapshot.total)}</div><p class="small muted">${h(S.positionSnapshot.source)} · ${h(S.positionSnapshot.date.split('-').reverse().join('/'))} · não são cotações em tempo real</p></div>`):''}${coverageAudit()}${box(`<div class="section"><h2>Importar arquivos da B3</h2><span class="chip">XLSX · até 20 MB</span></div><div class="uploader" id="drop-zone"><div class="large">⇧</div><h3>Selecione ou arraste suas planilhas</h3><p>Negociação (9 colunas), Movimentação (8 colunas) ou Posição (ETF, fundos e Tesouro). A Posição substitui a fotografia anterior sem duplicar investimentos.</p><button class="btn" data-act="open-import">Selecionar arquivos .xlsx</button></div><div class="notice good" style="margin-top:15px"><b>Deduplicação automática:</b> compara todos os campos do tipo correspondente, inclusive data, instituição, quantidade, preço, valor e ativo. Um registro idêntico já existente não entra novamente.</div>${ui.report?`<div class="sheet-detail" style="margin-top:15px;white-space:pre-wrap">${h(ui.report)}</div>`:''}`)}<div class="grid g2">${box(`<div class="section"><h2>Exportar negociação</h2><span class="chip">${nfmt(tCount,0)} registros</span></div><p class="small muted">Gera Excel com aba <b>Negociação</b> e as mesmas 9 colunas dos arquivos que você enviou, incluindo lançamentos manuais.</p><button class="btn" data-act="export-trade">⇩ Exportar negociação.xlsx</button>`)}${box(`<div class="section"><h2>Exportar movimentação</h2><span class="chip">${nfmt(mCount,0)} registros</span></div><p class="small muted">Gera Excel com aba <b>Movimentação</b> e as mesmas 8 colunas dos arquivos originais, incluindo lançamentos manuais.</p><button class="btn" data-act="export-mov">⇩ Exportar movimentacao.xlsx</button>`)}</div>${box(`<div class="section"><h2>Arquivos incorporados na criação</h2><span class="chip gray">${sources.length} arquivos</span></div><div class="list">${sources.map(([f,v])=>`<div class="statrow"><div style="min-width:0"><div class="name" style="word-break:break-all">${h(f)}</div><div class="desc">${v.type==='position'?'Posição B3':v.type==='trade'?'Negociação':'Movimentação'} · ${v.accepted} incorporados</div></div>${v.skipped?`<span class="chip amber">${v.skipped} repetidos</span>`:'<span class="chip">OK</span>'}</div>`).join('')||'<p class="muted small">Nenhum arquivo listado.</p>'}</div>`)}${box(`<div class="section"><h2>Backup e gerenciamento</h2></div><div class="row wrap"><button class="btn outline" data-act="backup">⇩ Backup completo (.json)</button><button class="btn outline" data-act="import-backup">⇧ Restaurar backup (.json)</button><button class="btn danger" data-act="clear">Apagar registros</button></div><p class="help" style="margin-top:15px">Os Excel exportados seguem o formato de colunas da B3. O JSON salva também metas, classificações e configurações do app. Seus dados ficam no armazenamento local deste navegador; para não perder informações, guarde backups periódicos.</p>`)} </div>`;}
 function render(){const D=activity();let html={home:()=>home(D),portfolio:()=>portfolio(D),ai:()=>ai(D),strategy:()=>strategy(D),goals:()=>goals(D),scenarios:()=>scenarios(D),records:()=>recordsPage(),files:()=>filesPage()}[page]?.()||home(D);document.getElementById('app').innerHTML=layout(html);if(ui.modal)renderModal();}
 function renderModal(){let t=ui.modal.t,rec=ui.modal.id?S.records.find(x=>x.id===ui.modal.id):null;const sample=rec?.v|| (t==='trade'?[dbr(new Date().toISOString().slice(0,10)),'Compra','Mercado à Vista','-','','',1,0,0]:['Credito',dbr(new Date().toISOString().slice(0,10)),'Dividendo','','',1,0,0]);const fields=header(t),selects=t==='trade'?{1:['Compra','Venda'],2:['Mercado à Vista','Mercado Fracionário','Outros']}:{0:['Credito','Debito'],2:['Dividendo','Juros Sobre Capital Próprio','Rendimento','Transferência','Transferência - Liquidação','Bonificação em Ativos','Direito de Subscrição','Compra','Venda','Outro']};
   const form=fields.map((label,i)=>{let value=sample[i]??'',date=i===(t==='trade'?0:1),numeric=(t==='trade'?[6,7,8]:[5,6,7]).includes(i),opts=selects[i];
     return `<div class="field"><label for="field${i}">${h(label)}</label>${opts?`<select id="field${i}" name="f${i}">${[...new Set([...opts,String(value)])].map(o=>`<option value="${h(o)}" ${o===String(value)?'selected':''}>${h(o)}</option>`).join('')}</select>`:`<input id="field${i}" name="f${i}" ${date?'type="date"':numeric?'type="text" inputmode="decimal"':'type="text"'} value="${date?toISO(value):h(value)}" ${numeric?'placeholder="Número ou -"':''} ${[0,1,3,4,5].includes(i)?'required':''}>`}</div>`;}).join('');
   $('.modal-bg')?.remove();const ov=document.createElement('div');ov.className='modal-bg';ov.innerHTML=`<div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="head"><div><h2 id="modal-title">${rec?'Editar':'Novo'} ${t==='trade'?'registro de negociação':'registro de movimentação'}</h2><p class="hint">Mesmas colunas da B3. Duplicatas completas são recusadas.</p></div><button class="close" data-act="close-modal" aria-label="Fechar">×</button></div><form id="record-form" class="stack"><div class="formgrid">${form}</div><div class="form-actions"><button class="btn outline" type="button" data-act="close-modal">Cancelar</button><button class="btn" type="submit">${rec?'Salvar alterações':'Adicionar registro'}</button></div></form></div>`;document.body.appendChild(ov);ov.addEventListener('click',e=>{if(e.target===ov){ui.modal=null;ov.remove();}});}
-async function importExcel(files){let count=0,dups=0,invalid=0,details=[];const known=new Set(S.records.map(r=>fingerprint(r.t,r.v)));
-  for(const f of Array.from(files)){if(!/\.xlsx$/i.test(f.name)){details.push(f.name+': extensão incompatível, selecione XLSX.');continue;}
-    try{const sheets=await Excel.read(f);let accepted=0,skip=0,bad=0,recognized=false;
-      for(const sheet of sheets){let rows=sheet.rows;let headIndex=-1,kind='';for(let i=0;i<Math.min(8,rows.length);i++){const k=norm(rows[i].join('|'));if(norm(rows[i][0])===norm(NHEAD[0])&&norm(rows[i][5])===norm(NHEAD[5])){kind='trade';headIndex=i;break;}if(norm(rows[i][0])===norm(MHEAD[0])&&norm(rows[i][2])===norm(MHEAD[2])){kind='mov';headIndex=i;break;}}
-        if(headIndex<0)continue;recognized=true;
-        for(const r of rows.slice(headIndex+1)){if(!r||!r.some(v=>txt(v)))continue;const v=canon(kind,r);if(!validRow(kind,v)){bad++;continue;}const key=fingerprint(kind,v);if(known.has(key)){skip++;continue;}known.add(key);S.records.push({t:kind,v,id:'i'+uid(),source:f.name});accepted++;}
-      }
-      if(!recognized)throw Error('Cabeçalhos não correspondem aos modelos B3 de Negociação ou Movimentação.');
-      S.sources[f.name]={accepted,skipped:skip,type:f.name.toLowerCase().includes('movimentacao')?'mov':'trade'};
-      count+=accepted;dups+=skip;invalid+=bad;details.push(`${f.name}: ${accepted} novos, ${skip} duplicados, ${bad} inválidos.`);
-    }catch(e){details.push(`${f.name}: ERRO — ${e.message}`);}
-  }
-  save();ui.report=`Resultado da importação: ${count} novos registros, ${dups} duplicados ignorados, ${invalid} inválidos.\n`+details.join('\n');page='files';ui.kind='trade';render();toast(`${count} novos, ${dups} repetidos bloqueados.`,count===0&&dups===0);
+
+function parsePositionSheet(rows){
+ if(!rows?.length)return null;
+ const head=rows[0].map(x=>norm(x)),idx=x=>head.indexOf(norm(x));
+ if(idx('Produto')!==0||idx('Valor Atualizado')<0||idx('Quantidade')<0)return null;
+ const group=idx('Vencimento')>=0&&idx('Código ISIN')>=0?'Tesouro Direto':idx('Administrador')>=0?'Fundo de Investimento':'ETF';
+ const pick=(r,c)=>idx(c)<0?'':r[idx(c)]??'';
+ const items=[],seen=new Set();let ignored=0;
+ for(const r of rows.slice(1)){
+  const product=txt(r[0]),qty=num(pick(r,'Quantidade')),value=num(pick(r,'Valor Atualizado'));
+  if(!/[A-Za-zÀ-ÿ]/.test(product)||!Number.isFinite(qty)||qty<0||!Number.isFinite(value)||value<0){ignored++;continue;}
+  const code=txt(pick(r,group==='Tesouro Direto'?'Código ISIN':'Código de Negociação'))||product.split(' - ')[0];
+  const key=[group,code,pick(r,'Instituição'),pick(r,'Conta'),qty,value].join('|');
+  if(seen.has(key)){ignored++;continue;}seen.add(key);
+  items.push({group,product,institution:txt(pick(r,'Instituição')),code,qty,
+   price:num(pick(r,'Preço de Fechamento'))||0,value,
+   available:num(pick(r,'Quantidade Disponível'))||0,
+   maturity:txt(pick(r,'Vencimento')),indexer:txt(pick(r,'Indexador')),
+   applied:num(pick(r,'Valor Aplicado'))||0,gross:num(pick(r,'Valor bruto'))||0,net:num(pick(r,'Valor líquido'))||0,
+   raw:r.slice(0,head.length)});
+ }
+ return{group,items,ignored};
+}
+async function importExcel(files){
+ let count=0,dups=0,invalid=0,positionCount=0,details=[];
+ const known=new Set(S.records.map(r=>fingerprint(r.t,r.v)));
+ for(const file of Array.from(files)){
+  if(!/\.xlsx$/i.test(file.name)){details.push(file.name+': somente XLSX.');continue;}
+  try{
+   const sheets=await Excel.read(file);let added=0,skip=0,bad=0,recognized=false;
+   const positions=[],positionKeys=new Set();
+   for(const sheet of sheets){
+    const rows=sheet.rows;
+    const parsed=parsePositionSheet(rows);
+    if(parsed){
+      recognized=true;for(const p of parsed.items){
+       const key=[p.group,p.code,p.institution,p.qty,p.value].join('|');
+       if(positionKeys.has(key)){skip++;continue;}
+       positionKeys.add(key);positions.push(p);
+      }continue;
+    }
+    let headIndex=-1,kind='';
+    for(let i=0;i<Math.min(8,rows.length);i++){
+      if(norm(rows[i][0])===norm(NHEAD[0])&&norm(rows[i][5])===norm(NHEAD[5])){kind='trade';headIndex=i;break;}
+      if(norm(rows[i][0])===norm(MHEAD[0])&&norm(rows[i][2])===norm(MHEAD[2])){kind='mov';headIndex=i;break;}
+    }
+    if(headIndex<0)continue;recognized=true;
+    for(const r of rows.slice(headIndex+1)){
+      if(!r||!r.some(v=>txt(v)))continue;
+      const v=canon(kind,r);if(!validRow(kind,v)){bad++;continue;}
+      const key=fingerprint(kind,v);if(known.has(key)){skip++;continue;}
+      known.add(key);S.records.push({t:kind,v,id:'i'+uid(),source:file.name});added++;
+    }
+   }
+   if(!recognized)throw Error('Formato B3 não identificado (Negociação, Movimentação ou Posição).');
+   if(positions.length){
+    const total=Math.round(positions.reduce((sum,r)=>sum+r.value,0)*100)/100;
+    S.positionSnapshot={date:new Date().toISOString().slice(0,10),source:file.name,rows:positions,total};
+    S.sources[file.name]={type:'position',accepted:positions.length,skipped:skip};
+    positionCount+=positions.length;
+    details.push(file.name+': posição atualizada — '+positions.length+' itens, '+money(total)+'.');
+   }else{
+    S.sources[file.name]={type:file.name.toLowerCase().includes('movimentacao')?'mov':'trade',accepted:added,skipped:skip};
+    details.push(file.name+': '+added+' novos, '+skip+' duplicados, '+bad+' inválidos.');
+   }
+   count+=added;dups+=skip;invalid+=bad;
+  }catch(e){details.push(file.name+': ERRO — '+e.message);}
+ }
+ if(count||positionCount)save();
+ ui.report='Importação: '+count+' novos no histórico; '+positionCount+' posições atualizadas; '+dups+' duplicados ignorados; '+invalid+' inválidos.\n'+details.join('\n');
+ page=positionCount?'portfolio':'files';ui.kind='trade';render();
+ toast(positionCount?'Posição atualizada: '+money(S.positionSnapshot.total):count+' novos, '+dups+' repetidos bloqueados.',!count&&!positionCount);
 }
 function download(blob,name){const link=document.createElement('a'),url=URL.createObjectURL(blob);link.href=url;link.download=name;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);}
 function exportSheet(t){const rows=groupRecords(t).slice().sort((a,b)=>dateOf(b).localeCompare(dateOf(a))).map(r=>r.v);const title=t==='trade'?'Negociação':'Movimentação',file=t==='trade'?'negociacao':'movimentacao';const blob=Excel.create(title,[header(t),...rows]);download(blob,`${file}-moneytracker-${new Date().toISOString().slice(0,10)}.xlsx`);toast(`Exportados ${rows.length} registros de ${title} no formato B3.`);}
