@@ -80,25 +80,74 @@ function normalizeState(raw){
  return out;
 }
 function ledger(state,owner='family'){
- const owners=owner==='family'?['me','spouse']:[ownerOf(owner)];
- const rows=(state.records||[]).filter(r=>r.t==='trade'&&owners.includes(ownerOf(r.owner))).slice().sort((a,b)=>recordDate(a).localeCompare(recordDate(b)));
- const stocks=new Map(),sales=[],problems=[];
- for(const r of rows){
-  const c=codeOf(r.v[5]),o=ownerOf(r.owner),q=number(r.v[6]),value=number(r.v[8]),act=norm(r.v[1]),date=recordDate(r);
-  if(!c||!date||!Number.isFinite(q)||!(q>0)||!Number.isFinite(value)||value<0)continue;
-  const key=o+'|'+c;if(!stocks.has(key))stocks.set(key,{owner:o,code:c,qty:0,cost:0,unmatched:0,qtyPurchased:0,buys:0});
-  const p=stocks.get(key);
-  if(act==='COMPRA'){p.qty+=q;p.cost+=value;p.buys++;p.qtyPurchased+=q;}
-  else if(act==='VENDA'){
-   const covered=Math.min(q,Math.max(0,p.qty));
-   const cost=covered>0?p.cost*covered/p.qty:0;
-   if(covered){p.cost-=cost;p.qty-=covered;}
-   const profit=value*(covered/q)-cost;
-   if(covered<q){p.unmatched+=q-covered;problems.push({owner:o,code:c,qty:q-covered,date,reason:'Venda sem compra anterior no histórico'});}
-   sales.push({owner:o,code:c,date,profit,unmatched:covered<q,covered,qty:q,gross:value});
+ const selected=owner==='family'?['me','spouse']:[ownerOf(owner)];
+ const items=[];
+ for(const r of state.records||[]){
+  const o=ownerOf(r.owner);
+  if(!selected.includes(o)||!Array.isArray(r.v))continue;
+  if(r.t==='trade'){
+   const d=recordDate(r),act=norm(r.v[1]);
+   if(d&&['COMPRA','VENDA'].includes(act))items.push({kind:'trade',r,owner:o,date:d,priority:act==='COMPRA'?1:2});
+  }else if(r.t==='mov'){
+   const d=recordDate(r),ev=norm(r.v[2]),dir=norm(r.v[0]);
+   if(d&&dir==='CREDITO'&&['DESDOBRO','BONIFICACAO EM ATIVOS','GRUPAMENTO','INCORPORACAO'].includes(ev))
+    items.push({kind:'event',r,owner:o,date:d,event:ev,priority:0});
   }
  }
- return{stocks,sales,problems};
+ // B3 Excel does not provide intraday execution times. Same-day buys precede
+ // sales; the result is a gross investment estimate, not a day-trade tax calculation.
+ items.sort((a,b)=>a.date.localeCompare(b.date)||a.priority-b.priority);
+ const stocks=new Map(),sales=[],problems=[],adjustments=[];
+ const get=(o,c)=>{
+  const key=o+'|'+c;
+  if(!stocks.has(key))stocks.set(key,{owner:o,code:c,qty:0,cost:0,unmatched:0,qtyPurchased:0,buys:0,uncertain:false});
+  return stocks.get(key);
+ };
+ for(const item of items){
+  const r=item.r,o=item.owner,date=item.date;
+  const c=item.kind==='trade'?codeOf(r.v[5]):codeOf(tidy(r.v[3]).split(' - ')[0]);
+  if(!c)continue;
+  const p=get(o,c),qty=number(r.v[item.kind==='trade'?6:5]);
+  if(!(qty>0)||!Number.isFinite(qty))continue;
+  if(item.kind==='event'){
+   const before=p.qty;
+   if(item.event==='DESDOBRO'){
+    p.qty+=qty;
+    // Splits add units without additional acquisition cost.
+    if(before<=0)p.uncertain=true;
+   }else if(item.event==='GRUPAMENTO'){
+    // B3 credits the new total after grouping, not the quantity to add.
+    p.qty=qty;if(before<=0)p.uncertain=true;
+   }else{
+    // Bonuses and incorporations have tax acquisition bases not in this B3 XLSX.
+    // Include units but withhold profits until the attributed cost is verified.
+    p.qty+=qty;p.uncertain=true;
+   }
+   adjustments.push({owner:o,code:c,date,type:item.event,qty,before,after:p.qty,uncertain:p.uncertain});
+   continue;
+  }
+  const value=number(r.v[8]),action=norm(r.v[1]);
+  if(!(value>=0)||!Number.isFinite(value))continue;
+  if(action==='COMPRA'){
+   p.qty+=qty;p.cost+=value;p.buys++;p.qtyPurchased+=qty;
+  }else{
+   const before=p.qty,covered=Math.min(qty,Math.max(0,before));
+   const coveredCost=covered>0?p.cost*covered/before:0;
+   const missingQty=Math.max(0,qty-covered);
+   const valid=missingQty<1e-8&&!p.uncertain;
+   const profit=valid?value-coveredCost:null;
+   if(covered){p.cost=Math.max(0,p.cost-coveredCost);p.qty=Math.max(0,p.qty-covered);}
+   if(missingQty>0){
+    p.unmatched+=missingQty;
+    problems.push({owner:o,code:c,qty:missingQty,date,reason:'Venda sem custo de aquisição completo'});
+   }else if(!valid){
+    problems.push({owner:o,code:c,qty:0,date,reason:'Custo desconhecido em bonificação, grupamento ou incorporação'});
+   }
+   sales.push({owner:o,code:c,date,profit,recognized:valid,uncertain:!valid,covered,qty,gross:value,unmatched:missingQty>0,reason:valid?'':p.uncertain?'Custo de aquisição não confirmado':'Compra anterior ausente'});
+   if(p.qty<1e-8){p.qty=0;p.cost=0;p.uncertain=false;}
+  }
+ }
+ return{stocks,sales,problems,adjustments};
 }
 function makeHistoricalHoldings(led,owner){
  return Array.from(led.stocks.values()).filter(p=>p.owner===owner&&p.qty>0.00000001).map(p=>({
