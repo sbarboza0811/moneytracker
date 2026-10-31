@@ -52,7 +52,7 @@ function profitCards(g,p){
  return '<div class="mt7-cards3">'+
  stat('Lucro nas vendas · apurado',money(g.realized),g.sales+' vendas com custo verificado','profit')+
  stat('Proventos identificados',money(g.dividends),g.payments+' pagamentos','income')+
- stat('Valorização em aberto · parcial',openLabel,ui.period==='all'?g.matched+' posições avaliadas':'Faltam preços históricos','profit')+
+ stat('Valorização em aberto'+(ui.period==='all'?(g.partial?' · parcial':''):' · não incluída'),openLabel,ui.period==='all'?g.matched+' posições avaliadas':'Sem preços históricos comparáveis','profit')+
  stat('Valor da posição',money(p.total),p.valuation==='mixed'?'B3 + estimativa histórica':'Valor conforme fontes disponíveis','portfolio')+
  '</div>';
 }
@@ -63,14 +63,15 @@ function periodFilters(){
 }
 function profitSummary(g){
  const incomplete=!g.complete||g.partial||g.excludedSales>0||g.missing>0;
- const message=incomplete?'Lucro total não verificável':'Lucro total apurado';
- const display=incomplete?'Não apurado':money(g.profit);
+ const historical=ui.period!=='all';
+ const message=historical?'Resultado realizado · parcial':(incomplete?'Resultado parcial':'Resultado total apurado');
+ const display=money(g.profit);
  return card(titlebar('Resultados · '+E.periodLabel[ui.period],'profit','Detalhar')+
  periodFilters()+
  '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px"><div class="mt7-mainnumber">'+display+'</div><span class="mt7-pill '+(incomplete?'warn':'')+'">'+message+'</span></div>'+
- '<p class="mt7-label">'+(incomplete?'Abaixo, somente parcelas identificáveis. Não representam o lucro total do período.':'Resultado integral com custos e preços confirmados.')+'</p>'+
+ '<p class="mt7-label">'+(historical?'Vendas e proventos do período, sem valorização de posições abertas.':(incomplete?'Soma das parcelas calculáveis; alguma valorização ou custo ainda não foi confirmado.':'Vendas, proventos e valorização aberta calculados com os dados disponíveis.'))+'</p>'+
  (g.warning?'<div class="mt7-note warning" style="margin-top:13px">'+esc(g.warning)+'</div>':'')+
- (incomplete?'<div class="mt7-note warning" style="margin-top:13px">Para o lucro total é necessário conciliar custo de aquisição, vendas não verificadas e valores históricos das posições. Acesse <button type="button" data-nav="needs">Pendências ›</button>. Nenhum valor desconhecido foi estimado como lucro.</div>':''));
+ (incomplete&&!historical?'<div class="mt7-note warning" style="margin-top:13px">O valor exibido é parcial. Consulte <button type="button" data-nav="needs">Pendências ›</button> para conferir o que impede o total completo.</div>':''));
 }
 function holdingsRows(p,limit=7){
  const holdings=p.holdings.slice(0,limit);
@@ -225,7 +226,7 @@ function profit(){
  return profitSummary(g)+reconciliationCard()+
  '<div class="mt7-cards3">'+stat('Lucro nas vendas',money(g.realized),g.sales+' vendas com custo comprovado')+
  stat('Proventos identificados',money(g.dividends),g.payments+' créditos','income')+
- stat('Valorização em aberto',ui.period==='all'?(g.openGain===null?'—':money(g.openGain)):'Não apurada',ui.period==='all'?g.matched+' de '+g.positions+' posições':'Faltam cotações do início do período')+
+ stat('Valorização em aberto',ui.period==='all'?(g.openGain===null?'—':money(g.openGain)):'Não incluída',ui.period==='all'?g.matched+' de '+g.positions+' posições':'Sem preços históricos comparáveis')+
  stat('Capital investido · posição',money(g.capitalInvested),p.valuation==='mixed'?'Consolidado indicativo':'Total atual das posições','portfolio')+stat('Vendas não conciliadas',String(g.excludedSales),'Fora do lucro exibido','needs')+'</div>'+
  card(titlebar('Gráfico de lucro ao longo do período')+monthlyChart(g))+
  card(titlebar('Evolução do patrimônio')+evolutionChart(ui.owner))+
