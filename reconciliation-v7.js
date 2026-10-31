@@ -10,22 +10,22 @@ const rounded=x=>Math.round((x+Number.EPSILON)*100)/100;
 const ownerSet=o=>o==='family'?['me','spouse']:[o==='spouse'?'spouse':'me'];
 const validStatus=s=>['CALCULAVEL_BRUTO','PROVISORIO','INCOMPLETO'].includes(s);
 function getEntries(state){
- const r=state&&state.reconciliation;
- return r&&r.owner==='spouse'&&Array.isArray(r.sales)?r.sales.filter(x=>
-  x&&/^\d{4}-\d{2}-\d{2}$/.test(String(x.date||''))&&
-  /^[A-Z0-9]{4,12}$/.test(String(x.code||''))&&validStatus(x.status)
- ):[];
+ const r=state&&state.reconciliation||{};
+ const inputs=[...(Array.isArray(r.sales)?r.sales.map(x=>({...x,owner:'spouse'})):[]),
+  ...(Array.isArray(r.meSales)?r.meSales.map(x=>({...x,owner:'me'})):[])];
+ return inputs.filter(x=>x&&/^\d{4}-\d{2}-\d{2}$/.test(String(x.date||''))&&
+ /^[A-Z0-9]{4,12}$/.test(String(x.code||''))&&validStatus(x.status));
 }
 function saleKey(x){return x.owner+'|'+x.date+'|'+E.codeOf(x.code);}
 function audit(state,owner='family',period='all',today=E.isoNow()){
  const from=E.cutoff(period,today),owners=ownerSet(owner),all=getEntries(state);
- const selected=all.filter(x=>owners.includes('spouse')&&x.date>=from&&x.date<=today);
+ const selected=all.filter(x=>owners.includes(x.owner)&&x.date>=from&&x.date<=today);
  const sales=[...E.ledger(state,owner).sales,...E.treasuryLedger(state,owner).sales]
   .filter(x=>x.date>=from&&x.date<=today);
  const groups=new Map(),overrides=new Map(),checks=[];
  for(const s of sales){const k=saleKey(s);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(s);}
  for(const rec of selected){
-  const key='spouse|'+rec.date+'|'+rec.code,rows=groups.get(key)||[];
+  const key=rec.owner+'|'+rec.date+'|'+rec.code,rows=groups.get(key)||[];
   const quantity=rows.reduce((t,x)=>t+num(x.qty),0);
   const gross=rows.reduce((t,x)=>t+num(x.gross),0);
   // Somente sobrepor quando a negociação da B3 confere com o arquivo auditado.
@@ -74,27 +74,32 @@ E.gaps=function(state,owner='family',today=E.isoNow()){
    action:'Nada a reenviar de 2024. Para valor de mercado atual, é necessária uma posição de 2026 se ela não estiver disponível nas fontes conectadas.'};
  });
  if(!getEntries(state).length)return revised.filter(x=>x.code!=='cash-flow-coverage');
- const includeSpouse=ownerSet(owner).includes('spouse');
+ const auditable=new Set(getEntries(state).map(x=>x.owner));
+ const selected=ownerSet(owner);
  const items=revised.filter(x=>x.code!=='cash-flow-coverage'&&
-  !(includeSpouse&&x.owner==='spouse'&&x.code==='unverified-sales'));
- if(!includeSpouse)return items;
- const report=audit(state,'spouse','all',today),g=E.gains(state,'spouse','all',today);
- const pending=report.checks.filter(x=>!x.matched||x.status!=='CALCULAVEL_BRUTO');
- if(g.excludedSales>0){
-  const codes=[...new Set(pending.map(x=>x.code))];
-  items.push({level:'critical',owner:'spouse',code:'reconciliation-unverified',
-   title:g.excludedSales+' venda(s) ainda sem custo verificado (Jessica)',
-   why:pending.length+' grupos de operações com custo provisório/incompleto. '+
-    (codes.length?'Ativos: '+codes.join(', ')+'. ':'')+
-    'As '+report.verified+' vendas conciliadas não estão nesta pendência.',
-   action:'Veja abaixo cada data e ativo. Consulte notas de aquisição ou custo de eventos societários; não é necessário buscar 2024 sem negociações.'});
+   !(x.code==='unverified-sales'&&selected.includes(x.owner)&&auditable.has(x.owner)));
+ for(const o of selected){
+  if(!auditable.has(o))continue;
+  const report=audit(state,o,'all',today),g=E.gains(state,o,'all',today);
+  if(g.excludedSales<=0&&report.unmatched===0)continue;
+  const raw=[...E.ledger(state,o).sales,...E.treasuryLedger(state,o).sales];
+  const verified=new Set(report.checks.filter(x=>x.matched&&x.status==='CALCULAVEL_BRUTO')
+   .map(x=>x.owner+'|'+x.date+'|'+x.code));
+  const unresolved=raw.filter(x=>!x.recognized&&!verified.has(x.owner+'|'+x.date+'|'+x.code));
+  const codes=[...new Set(unresolved.map(x=>x.code))];
+  items.push({level:'critical',owner:o,code:'reconciliation-unverified',
+    title:g.excludedSales+' venda(s) sem custo comprovado ('+(o==='spouse'?'Jessica':'Samuel')+')',
+    why:report.verified+' grupo(s) já conciliados por documentos. Restam '+g.excludedSales+
+      ' registros em '+[...new Set(unresolved.map(x=>x.date+'|'+x.code))].length+
+      ' grupos, entre eles '+codes.slice(0,12).join(', ')+'.',
+    action:'Confira os detalhes por ativo/data abaixo. A negociação já foi importada; faltam custos históricos ou eventos específicos das unidades.'});
  }
  return items;
 };
 
 E.gains=function(state,owner='family',period='all',today=E.isoNow()){
  const base=originalGains(state,owner,period,today);
- if(!getEntries(state).length||!ownerSet(owner).includes('spouse'))return base;
+ if(!getEntries(state).some(x=>ownerSet(owner).includes(x.owner)))return base;
  const a=audit(state,owner,period,today);
  const sales=a.sales.map(x=>a.overrides.has(x)?{...x,...a.overrides.get(x)}:x);
  const recognized=sales.filter(x=>x.recognized&&Number.isFinite(x.profit));
@@ -112,9 +117,9 @@ E.gains=function(state,owner='family',period='all',today=E.isoNow()){
  const realized=rounded(recognized.reduce((total,x)=>total+x.profit,0));
  const dividends=rounded(payouts.reduce((total,x)=>total+x.amount,0));
  const confirmedKeys=new Set(a.checks.filter(x=>x.matched&&x.status==='CALCULAVEL_BRUTO')
-  .map(x=>'spouse|'+x.date+'|'+x.code));
+  .map(x=>x.owner+'|'+x.date+'|'+x.code));
  const remainingProblems=(base.unmatched||[]).filter(p=>
-  !confirmedKeys.has((p.owner||'spouse')+'|'+p.date+'|'+E.codeOf(p.code)));
+  !confirmedKeys.has((p.owner||'me')+'|'+p.date+'|'+E.codeOf(p.code)));
  const parts=[];
  if(excluded.length)parts.push(excluded.length+' negociações sem custo confirmado foram excluídas do lucro.');
  if(a.unmatched)parts.push(a.unmatched+' conciliações não coincidiram com as negociações importadas.');
