@@ -133,3 +133,10 @@ body .toast{right:15px!important;left:15px!important;bottom:90px!important;max-w
 .v4line{display:block;width:100%;height:auto;max-height:235px;margin-top:9px;overflow:visible}
 .v4lineaxis{display:flex;justify-content:space-between;color:#85998b;font-size:11px;margin:0 8px}
 .v4nativefile input[type=file]:focus-visible,.v4ownerselect button:focus-visible,.v4profitstat:focus-visible,.v4profitbanner:focus-visible{outline:3px solid #76cfae;outline-offset:2px}
+
+/* Native file picker: whole import area is tappable, including Android WebView. */
+.v4nativefile{position:relative;display:flex;flex-direction:column;gap:9px;min-height:132px;justify-content:center;overflow:hidden;border:2px dashed #63b89a;border-radius:15px;background:#eef9f3;padding:18px;text-align:center;cursor:pointer}
+.v4nativefile label{pointer-events:none;font-weight:800;color:#145d42}
+.v4nativefile input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:.015;cursor:pointer;font-size:100px}
+.v4nativefile p{pointer-events:none;margin:0;color:#56796b;font-size:12px}
+.v4nativefile:focus-within{outline:3px solid #48a67c;outline-offset:2px}
