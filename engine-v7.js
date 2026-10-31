@@ -257,14 +257,21 @@ function portfolio(state,owner='family'){
    // Do not reprice Renda Fixa or unconfirmed positions.
    if(x.origin==='position'&&x.group!=='Tesouro'&&!x.fixedIncome){
     const q=state.quotes?.[x.code],price=Number(q?.price);
-    const fetchedAge=Date.now()-Date.parse(q?.at||'');
-    const marketAge=q?.marketDate?Date.now()-Date.parse(String(q.marketDate)+'T12:00:00Z'):null;
+    // Use the most recent documented price, even when the quote service is unavailable.
+    // A B3 position with a newer date takes precedence over an older saved quote.
+    const quoteDay=String(q?.marketDate||q?.at||'').slice(0,10);
+    const quoteTime=/^\d{4}-\d{2}-\d{2}$/.test(quoteDay)?Date.parse(quoteDay+'T12:00:00Z'):NaN;
+    const positionTime=/^\d{4}-\d{2}-\d{2}$/.test(String(x.date||''))?Date.parse(x.date+'T12:00:00Z'):NaN;
     const validSource=/brapi|capital agora/i.test(String(q?.provider||''));
-    const validFetch=Number.isFinite(fetchedAge)&&fetchedAge>=0&&fetchedAge<=4*86400000;
-    const validMarket=marketAge===null||(Number.isFinite(marketAge)&&marketAge>=-86400000&&marketAge<=8*86400000);
-    if(validSource&&Number.isFinite(price)&&price>0&&validFetch&&validMarket){
+    const usable=validSource&&Number.isFinite(price)&&price>0&&
+      Number.isFinite(quoteTime)&&quoteTime<=Date.now()+86400000&&
+      (!Number.isFinite(positionTime)||quoteTime>=positionTime);
+    if(usable){
+     const fetchedAge=Date.now()-Date.parse(q.at||'');
+     const marketAge=Date.now()-quoteTime;
+     const recent=Number.isFinite(fetchedAge)&&fetchedAge>=0&&fetchedAge<=4*86400000&&marketAge<=8*86400000;
      x.snapshotValue=x.value;x.value=Math.round(x.qty*price*100)/100;x.unit=price;
-     x.origin='quote';x.quoteDate=q.marketDate||String(q.at).slice(0,10);x.quoteProvider=q.provider;
+     x.origin='quote';x.quoteDate=quoteDay;x.quoteProvider=q.provider;x.quoteStale=!recent;
     }
    }
    holdings.push(x);
