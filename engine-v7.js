@@ -365,8 +365,13 @@ function parsePositionRows(rows){
  for(const row of rows.slice(index+1)){
   if(!row||!row.some(x=>tidy(x)))continue;
   const product=tidy(row[0]),q=number(get(row,'Quantidade')),v=number(get(row,'Valor Atualizado'));
-  if(!product||!Number.isFinite(q)||q<0||!Number.isFinite(v)||v<0){skipped++;continue;}
-  const code=tidy(get(row,group==='Tesouro Direto'?'Código ISIN':'Código de Negociação'))||product.split(' - ')[0];
+  const candidate=tidy(get(row,group==='Tesouro Direto'?'Código ISIN':'Código de Negociação'));
+  const valid=group==='Tesouro Direto'?(/^Tesouro /i.test(product)&&/^[A-Z0-9]{10,15}$/i.test(candidate)):
+   (/^[A-Z]{4}[0-9]{2}$/i.test(candidate)&&product.toUpperCase().startsWith(candidate.toUpperCase()+' -'));
+  // B3 workbook exports include footer repetitions such as "55|55|...|Total|72570".
+  // They are NOT assets; never parse them as holdings.
+  if(!valid||!(q>0)||!Number.isFinite(v)||v<0){skipped++;continue;}
+  const code=group==='Tesouro Direto'?product:candidate;
   items.push({group,product,code,institution:tidy(get(row,'Instituição')),qty:q,value:v,
    price:number(get(row,'Preço de Fechamento'))||0,available:number(get(row,'Quantidade Disponível'))||0,
    maturity:tidy(get(row,'Vencimento')),indexer:tidy(get(row,'Indexador')),applied:number(get(row,'Valor Aplicado'))||0});
