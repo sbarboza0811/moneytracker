@@ -135,7 +135,7 @@ function quoteUpdateControls(){
 }
 function assetRow(h,d){
  const b=basisFor(h,d.ledger),gain=b.verified?money(h.value-b.cost):'—';
- const q=quoteMeta(h.code),priceInfo=!h.fixedIncome&&q.fresh?' · '+money(q.quote.price)+'/un.':'';
+ const q=quoteMeta(h.code),priceInfo=!h.fixedIncome&&(q.fresh?' · '+money(q.quote.price)+'/un.':h.snapshotPrice>0?' · B3 '+money(h.snapshotPrice)+'/un.':'');
  return '<button class="m8-asset-row" data-asset="'+escape(h.owner+'|'+h.code)+'"><span class="m8-token">'+escape(h.fixedIncome?'RF':h.code.slice(0,2))+'</span><span class="m8-asset-title"><strong>'+escape(h.code)+'</strong><small>'+escape(me(h.owner))+' · '+escape(group(h.code,h.group))+(h.fixedIncome?' · Saldo nominal':'')+priceInfo+'</small></span><span class="m8-asset-money"><strong>'+money(h.value)+'</strong><small class="'+(b.verified?'positive':'muted')+'">'+gain+'</small></span><b>›</b></button>';
 }
 function kpi(d){return '<div class="m8-kpis">'+iconStat('Patrimônio representado',money(d.total),d.holdings.length+' posições · valores de fontes diferentes','blue','portfolio')+iconStat('Resultado realizado',money(d.realized+d.dividends),'Vendas + proventos do período','teal','result')+iconStat('Proventos',money(d.dividends),d.payouts.length+' pagamentos','violet','income')+iconStat('Valorização apurada',d.openGain.matched?money(d.openGain.gain):'—',d.openGain.missing+' posições sem valorização','orange','flow')+'</div>';}
@@ -377,7 +377,7 @@ function pageAsset(){
  (sales.length?box(header('Vendas e lucro','Clique para ver a apuração')+sales.slice(0,30).map(saleRow).join('')):'')+
  (!h.fixedIncome?box(header('Cotação do ativo','Preço unitário × quantidade (quando cotação disponível)')+
  '<p><strong>'+(quoteMeta(h.code).fresh?money(quoteMeta(h.code).quote.price):'Sem cotação válida')+'</strong> / unidade · '+fmt(h.qty)+' unidade(s)</p>'+
- (quoteMeta(h.code).fresh?'<p>Valor calculado: <b>'+money(h.qty*Number(quoteMeta(h.code).quote.price))+'</b> · '+escape(quoteMeta(h.code).quote.provider)+' · '+escape(E.dateBR(quoteMeta(h.code).quote.marketDate||String(quoteMeta(h.code).quote.at).slice(0,10)))+'</p>':'<p>Usando o valor de origem até encontrar cotação válida.</p>')+
+ (quoteMeta(h.code).fresh?'<p>Valor calculado: <b>'+money(h.qty*Number(quoteMeta(h.code).quote.price))+'</b> · '+escape(quoteMeta(h.code).quote.provider)+' · '+escape(E.dateBR(quoteMeta(h.code).quote.marketDate||String(quoteMeta(h.code).quote.at).slice(0,10)))+'</p>':h.snapshotPrice>0?'<p>Último preço registrado na Posição B3: <b>'+money(h.snapshotPrice)+'</b> (data '+escape(E.dateBR(h.date||''))+'). Não é cotação atual.</p>':'<p>Usando o valor de origem até encontrar cotação válida.</p>')+
  '<button class="m8-btn sub" data-quote="'+escape(h.code)+'" '+(U.quoteLoading?'disabled':'')+'>Atualizar cotação</button>'):'');
 }
 function pageSale(){
@@ -420,10 +420,11 @@ function pageQuotes(){
  quoteSummary()+quoteUpdateControls()+
  '<p class="m8-hint">Cotação é o preço disponível do provedor, não necessariamente em tempo real. Ativos sem preço válido permanecem avaliados pelo documento de origem.</p>'+
  (holdings.length?holdings.slice(0,U.limit).map(h=>{
-  const m=quoteMeta(h.code),q=m.quote,price=m.fresh?money(q.price):'—',
-  value=m.fresh?money(h.qty*Number(q.price)):'—',
+  const m=quoteMeta(h.code),q=m.quote,hasB3=h.snapshotPrice>0&&h.origin!=='estimated',
+  price=m.fresh?money(q.price):hasB3?money(h.snapshotPrice):'—',
+  value=m.fresh?money(h.qty*Number(q.price)):hasB3?money(h.snapshotValue??h.value):'—',
   dt=q?.marketDate?E.dateBR(q.marketDate):q?.at?E.dateBR(String(q.at).slice(0,10)):'';
-  return '<div class="m8-quote-row"><div class="m8-quote-name"><b>'+escape(h.code)+'</b><small>'+escape(me(h.owner))+' · '+fmt(h.qty)+' un.</small><small>'+(m.fresh?'Cotação '+escape(dt)+' · '+escape(q.provider):q?'Preço vencido · '+escape(dt):'Sem cotação disponível')+'</small></div>'+
+  return '<div class="m8-quote-row"><div class="m8-quote-name"><b>'+escape(h.code)+'</b><small>'+escape(me(h.owner))+' · '+fmt(h.qty)+' un.</small><small>'+(m.fresh?'Cotação '+escape(dt)+' · '+escape(q.provider):hasB3?'Última posição B3 · '+escape(E.dateBR(h.date||''))+' · não atual':q?'Preço vencido · '+escape(dt):'Sem cotação disponível')+'</small></div>'+
   '<div class="m8-quote-prices"><b>'+price+'</b><strong>'+value+'</strong></div>'+
   '<button class="m8-btn sub" data-quote="'+escape(h.code)+'" '+(U.quoteLoading?'disabled':'')+'>Consultar</button></div>';
  }).join('')+(holdings.length>U.limit?'<button class="m8-btn sub" data-action="more">Ver mais</button>':''):empty('Nenhum ativo negociado identificado.'))+
