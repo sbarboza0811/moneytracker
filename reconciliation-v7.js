@@ -174,8 +174,7 @@ E.gains=function(state,owner='family',period='all',today=E.isoNow()){
    Compras são fontes do custo médio, não lotes FIFO específicos. */
 E.profitBreakdown=function(state,owner='family',period='all',today=E.isoNow()){
  const owners=ownerSet(owner),from=E.cutoff(period,today),a=audit(state,owner,period,today);
- const raw=[...E.ledger(state,owner).sales,...E.treasuryLedger(state,owner).sales]
-   .filter(x=>x.date>=from&&x.date<=today);
+ const raw=a.sales; // Mesmas referências usadas pelo mapa de conciliações.
  const sales=raw.map(x=>{
    const v=a.overrides.get(x);
    const row=v?{...x,...v}:x;
