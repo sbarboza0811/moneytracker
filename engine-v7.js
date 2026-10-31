@@ -269,10 +269,16 @@ function gaps(state,owner='family',today=isoNow()){
   }
   // Ausência de operações em um ano é válida e não indica arquivo faltante.
   // Exigir histórico adicional apenas por lacunas comprovadas (como vendas sem compras).
-  const problems=led.problems.filter(x=>x.owner===o);
-  if(problems.length)items.push({level:'critical',owner:o,title:'Vendas sem compras anteriores ('+name+')',
-    why:problems.length+' operação(ões) com histórico insuficiente; podem existir transferências ou eventos societários.',
-    action:'Busque Negociação B3 anterior às vendas e os avisos de transferência de custódia; confira desdobramentos e bonificações.',code:'unmatched-sales'});
+  const unverified=led.sales.filter(x=>x.owner===o&&!x.recognized);
+  if(unverified.length){
+   const codes=[...new Set(unverified.map(x=>x.code))];
+   items.push({level:'critical',owner:o,
+    title:unverified.length+' vendas sem custo comprovado ('+name+')',
+    why:'As operações dos ativos '+codes.slice(0,12).join(', ')+(codes.length>12?' e outros':'')+
+     ' não podem ter lucro apurado sem uma compra anterior completa ou o custo atribuído em eventos societários. Essas vendas NÃO entram no resultado exibido.',
+    action:'No histórico de Negociação e Movimentação B3 e nos extratos da corretora, confira a origem e o custo de aquisição desses códigos. Em bonificações, verifique o custo atribuído pelo emissor. Não é necessário trazer anos sem movimentações.',
+    code:'unverified-sales'});
+  }
   if(item&&item.source==='position'){
    const result=gains(state,o,'all',today);
    if(result.missing)items.push({level:'warning',owner:o,title:'Conciliar custo médio de '+name,
