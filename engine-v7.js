@@ -202,15 +202,25 @@ function dividendRows(state,owner){
 function gains(state,owner='family',period='all',today=isoNow()){
  const from=cutoff(period,today),port=portfolio(state,owner),led=ledger(state,owner);
  const sales=led.sales.filter(x=>x.date>=from&&x.date<=today);
+ const recognizedSales=sales.filter(x=>x.recognized&&Number.isFinite(x.profit));
+ const excludedSales=sales.filter(x=>!x.recognized);
  const payouts=dividendRows(state,owner).filter(x=>x.date>=from&&x.date<=today);
- const realized=sales.reduce((n,x)=>n+x.profit,0);
+ const realized=recognizedSales.reduce((n,x)=>n+x.profit,0);
  const dividends=payouts.reduce((n,x)=>n+x.amount,0);
- let openGain=0,matched=0,missing=0;
+ let openGain=0,matched=0,missing=0,tesouroMatched=0;
  for(const h of port.holdings){
   if(h.origin!=='position'&&h.origin!=='quote'){missing++;continue;}
+  if(h.group==='Tesouro'){
+   // B3 position report contains Valor Aplicado for Tesouro Direto.
+   // Value - applied is GROSS mark-to-market gain, not after taxes.
+   if(Number.isFinite(h.applied)&&h.applied>0){
+    matched++;tesouroMatched++;openGain+=h.value-h.applied;
+   }else missing++;
+   continue;
+  }
   const basis=led.stocks.get(h.owner+'|'+codeOf(h.code));
   const tolerance=Math.max(.00001,.002*h.qty);
-  if(!basis||basis.qty<=0||Math.abs(basis.qty-h.qty)>tolerance){missing++;continue;}
+  if(!basis||basis.uncertain||basis.qty<=0||Math.abs(basis.qty-h.qty)>tolerance){missing++;continue;}
   matched++;openGain+=h.value-basis.cost;
  }
  const openAvailable=period==='all'&&matched>0;
@@ -218,19 +228,28 @@ function gains(state,owner='family',period='all',today=isoNow()){
  const profit=realized+dividends+openIncluded;
  const unmatched=led.problems.filter(p=>p.date<=today);
  const missingWindow=period!=='all';
- const complete=port.holdings.length>0&&missing===0&&unmatched.length===0&&period==='all';
+ const complete=port.holdings.length>0&&missing===0&&unmatched.length===0&&excludedSales.length===0&&period==='all';
  const monthly=new Map();
- const add=(date,key,amount)=>{const k=date.slice(0,7);if(!monthly.has(k))monthly.set(k,{month:k,realized:0,dividends:0});monthly.get(k)[key]+=amount;};
- sales.forEach(s=>add(s.date,'realized',s.profit));payouts.forEach(p=>add(p.date,'dividends',p.amount));
+ const add=(date,key,amount)=>{
+  if(!Number.isFinite(amount))return;
+  const k=date.slice(0,7);if(!monthly.has(k))monthly.set(k,{month:k,realized:0,dividends:0});
+  monthly.get(k)[key]+=amount;
+ };
+ recognizedSales.forEach(x=>add(x.date,'realized',x.profit));
+ payouts.forEach(p=>add(p.date,'dividends',p.amount));
  const months=[...monthly.values()].sort((a,b)=>a.month.localeCompare(b.month));
+ let warning='';
+ if(excludedSales.length)warning=excludedSales.length+' venda(s) do período estão fora do lucro porque não há custo de aquisição completo. Consulte Pendências.';
+ if(missing)warning+=(warning?' ':'')+missing+' posição(ões) sem custo conciliado ou preço B3; o ganho em aberto é parcial.';
+ if(missingWindow)warning+=(warning?' ':'')+'A valorização das posições abertas nesse período não é calculada sem preços históricos comparáveis.';
+ if(!warning&&unmatched.length)warning='Há eventos societários ou compras anteriores a conferir; o resultado acumulado pode estar incompleto.';
  return{
-   owner,period,from,to:today,profit,realized,dividends,openGain:matched?openGain:null,
-   openIncluded,openAvailable,matched,missing,complete:complete&&!missingWindow,
-   partial:!complete||missingWindow,sales:sales.length,payments:payouts.length,
-   positions:port.holdings.length,capitalInvested:port.total,unmatched,monthly:months,
-   warning:missingWindow?'A valorização dos ativos em aberto no período exige posições e preços históricos. O filtro mostra vendas e proventos recebidos no intervalo.':
-       missing?'Nem todas as posições têm preço B3 e custo de aquisição conciliado. O ganho total exibido é parcial.':
-       unmatched.length?'Há vendas sem compras anteriores registradas. O ganho nas vendas pode estar incompleto.':''
+  owner,period,from,to:today,profit,realized,dividends,openGain:matched?openGain:null,
+  openIncluded,openAvailable,matched,missing,tesouroMatched,complete,partial:!complete,
+  sales:recognizedSales.length,totalSales:sales.length,excludedSales:excludedSales.length,
+  excludedGross:excludedSales.reduce((n,x)=>n+x.gross,0),
+  payments:payouts.length,positions:port.holdings.length,
+  capitalInvested:port.total,unmatched,monthly:months,warning
  };
 }
 function gaps(state,owner='family',today=isoNow()){
