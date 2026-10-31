@@ -27,8 +27,8 @@ function layout(content){
  '<aside class="mt7-side"><div class="mt7-brand"><i>↗</i><span>money<span>tracker</span></span></div>'+
  '<nav>'+NAV.map(n=>'<button type="button" data-nav="'+n[0]+'" class="'+(ui.page===n[0]?'active':'')+'"><span class="ico">'+n[1]+'</span>'+n[2]+'</button>').join('')+
  '<button data-nav="more"><span class="ico">☰</span>Mais</button></nav>'+
- '<div class="foot">Seus investimentos, no seu controle.<div class="mt7-version">MoneyTracker 7.5 · Dados privados</div></div></aside>'+
- '<main class="mt7-body"><header class="mt7-top"><div><div class="mt7-eyebrow">MoneyTracker / Versão 7.5</div><h1>'+pages[ui.page]+'</h1></div>'+
+ '<div class="foot">Seus investimentos, no seu controle.<div class="mt7-version">MoneyTracker 7.6 · Dados privados</div></div></aside>'+
+ '<main class="mt7-body"><header class="mt7-top"><div><div class="mt7-eyebrow">MoneyTracker / Versão 7.6</div><h1>'+pages[ui.page]+'</h1></div>'+
  '<div class="mt7-top-actions"><button data-nav="needs" title="O que falta para completar" class="mt7-iconbtn" aria-label="Pendências">☑</button>'+
  '<button data-nav="more" title="Conta, backup e sincronização" class="mt7-iconbtn" aria-label="Mais">☰</button></div></header>'+
  '<div class="mt7-owners" role="group" aria-label="Selecionar carteira">'+ownerButton('family','Família')+ownerButton('me','Minha')+ownerButton('spouse','Esposa')+'</div>'+
@@ -373,7 +373,7 @@ function more(){
  '<div class="mt7-actionrow"><button class="mt7-btn" data-action="backup">Exportar backup JSON</button>'+
  '<button class="mt7-btn ghost" data-action="restore-pick">Restaurar backup</button></div>'+
  '<input type="file" id="mt7-restore-file" accept="application/json,.json" hidden>'+
- '<p class="mt7-footnote">Versão 7.5 · Não altera a conta ou os dados de outros projetos.</p>');
+ '<p class="mt7-footnote">Versão 7.6 · Não altera a conta ou os dados de outros projetos.</p>');
 }
 function render(){
  const app=document.getElementById('mt7-app');if(!app)return;
