@@ -230,7 +230,7 @@ E.gains=function(state,owner='family',period='all',today=E.isoNow()){
    parts.push('A posição histórica da Jessica foi recebida; sem um valor de mercado atual, a valorização em aberto não pode ser concluída.');
   else parts.push(missing+' posições abertas ainda sem custo/preço suficiente para valorização completa.');
  }
- if(period!=='all')parts.push('Sem preço histórico, a valorização de posições abertas neste intervalo não é apurada.');
+ // O filtro histórico mostra apenas vendas e proventos. Não repetir aviso de valorização não incluída: a interface já informa isso.
  if(remainingProblems.length)parts.push('Existem '+remainingProblems.length+' problemas históricos ainda não conciliados.');
  return{...base,unmatched:remainingProblems,realized,dividends,openGain,openIncluded,matched,missing,
   profit:rounded(realized+dividends+openIncluded),
