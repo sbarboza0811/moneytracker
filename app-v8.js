@@ -40,7 +40,7 @@ function rows(){
  return {...z,holdings,sales:rawSales,payouts,realized:saleProfit,dividends:div,total,openGain:openGain(holdings,z.ledger),excluded:rawSales.length-recognized.length};
 }
 function basisFor(h,ledger){
- if(h.fixedIncome)return{cost:h.value,verified:false,reason:'Saldo nominal, sem juros comprovados'};
+ if(h.fixedIncome)return{cost:h.value,verified:false,nominal:true,reason:'Principal conhecido, juros não informados'};
  if(h.group==='Tesouro'||group(h.code,h.group)==='Tesouro'){
   if(Number.isFinite(+h.applied)&&+h.applied>0)return{cost:+h.applied,verified:true};
   return{cost:null,verified:false,reason:'Sem valor aplicado'};
@@ -53,8 +53,8 @@ function basisFor(h,ledger){
  return{cost:null,verified:false,reason:'Custo ainda não conciliado'};
 }
 function openGain(holdings,ledger){
- const a=holdings.map(h=>({...basisFor(h,ledger),h})),complete=a.filter(x=>x.verified);
- return{gain:round(complete.reduce((n,x)=>n+x.h.value-x.cost,0)),cost:round(complete.reduce((n,x)=>n+x.cost,0)),missing:a.length-complete.length,matched:complete.length};
+ const a=holdings.map(h=>({...basisFor(h,ledger),h})),complete=a.filter(x=>x.verified),unknown=a.filter(x=>!x.verified&&!x.nominal),nominal=a.filter(x=>x.nominal);
+ return{gain:round(complete.reduce((n,x)=>n+x.h.value-x.cost,0)),cost:round(complete.reduce((n,x)=>n+x.cost,0)),missing:unknown.length,incomePending:nominal.length,nominalValue:round(nominal.reduce((n,x)=>n+x.h.value,0)),matched:complete.length};
 }
 function monthly(sales,payouts,from,to){
  const map=new Map();
@@ -326,19 +326,17 @@ function pageCompare(){
  action('Ver fontes e pendências','needs',true))+'</div>';
 }
 function pageFlow(){
- const d=rows(),m=getMonths(d),cost=d.openGain.cost,unknown=d.holdings.filter(h=>!basisFor(h,d.ledger).verified).reduce((n,h)=>n+h.value,0);
- return wealthDashboard(true)+'<div class="m8-kpis">'+iconStat('Patrimônio representado',money(d.total),'Posições atuais e estimadas','blue','portfolio')+
- iconStat('Custo conhecido',money(cost),d.openGain.matched+' posições com base','orange','flow')+
- iconStat('Ganho em aberto',d.openGain.matched?money(d.openGain.gain):'—','Parcela com custo e mercado','teal','result')+
- iconStat('Sem valorização comprovada',money(unknown),d.openGain.missing+' posições','violet','needs')+'</div>'+
- box(header('Composição do patrimônio','Separação feita somente quando o custo e a avaliação são verificáveis')+
- '<div class="m8-stack">'+(cost>0?'<div style="width:'+Math.min(100,100*cost/Math.max(d.total,cost))+'%;background:#5477e9"></div>':'')+
- (d.openGain.gain>0?'<div style="width:'+Math.min(100,100*d.openGain.gain/Math.max(d.total,cost+d.openGain.gain))+'%;background:#1db697"></div>':'')+
- (unknown>0?'<div style="width:'+Math.min(100,100*unknown/Math.max(d.total,unknown))+'%;background:#9b7bdc"></div>':'')+'</div>'+
- '<div class="m8-legend"><span><i style="background:#5477e9"></i>Custo conhecido</span><span><i style="background:#1db697"></i>Ganho em aberto positivo</span><span><i style="background:#9b7bdc"></i>Sem valorização confirmada</span></div>'+
- '<div class="m8-notice">O custo das posições NÃO é igual ao dinheiro novo aportado. Sem extratos bancários de depósitos e retiradas, não podemos identificar aportes líquidos reais. Reinvestimentos não contam como dinheiro novo.</div>')+
- '<div class="m8-grid m8-two">'+box(header('Evolução de posições B3','Dados reais das datas disponíveis')+lineChart(trendPositions()))+
- box(header('Resultado realizado','Não confundido com variação do patrimônio')+barChart(m.length>24?m.slice(-24):m,U.grain))+'</div>';
+ const d=rows(),unknown=d.holdings.filter(h=>!basisFor(h,d.ledger).verified&&!h.fixedIncome).reduce((n,h)=>n+h.value,0);
+ const changes=d.openGain,bank=d.holdings.filter(h=>h.fixedIncome);
+ return '<div class="m8-kpis">'+iconStat('Patrimônio representado',money(d.total),'Valores atuais e nominais','blue','portfolio')+
+ iconStat('Custo conciliado',money(changes.cost),changes.matched+' posições avaliadas','orange','flow')+
+ iconStat('Valorização identificada',changes.matched?money(changes.gain):'—','Ganho em aberto onde calculável','teal','result')+
+ iconStat('Renda fixa nominal',money(changes.nominalValue),changes.incomePending+' aplicações sem juros atualizados','violet','portfolio')+'</div>'+
+ wealthDashboard(true)+
+ (unknown>0?box(header('Valores sem custo conciliado','Posições que ainda exigem base documental')+'<p><strong>'+money(unknown)+'</strong> em '+changes.missing+' posição(ões).</p>'):'')+
+ box(header('Dinheiro novo × reinvestimento','O que conseguimos afirmar com os dados disponíveis')+
+ '<div class="m8-notice">Compras de ativos e aplicações de renda fixa não representam necessariamente dinheiro novo. Para calcular aportes líquidos, precisamos conhecer depósitos externos, transferências e saques. O gráfico de aplicações mostra apenas operações de compra identificadas, e não depósitos confirmados.</div>'+
+ (bank.length?'<p class="m8-hint">RDB e LCI: '+money(changes.nominalValue)+' de principal líquido registrado em '+bank.length+' aplicação(ões). Os juros não foram inventados nem registrados como lucro ou pendência de custo.</p>':'')) ;
 }
 function analyze(){analysis={state:S,owner:U.owner,issues:E.gaps(S,U.owner),at:new Date().toISOString()};}
 function pageNeeds(){
