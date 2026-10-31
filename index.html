@@ -166,17 +166,6 @@ function activity(){
       let cat=r.group==='Tesouro Direto'?'rf':r.group==='Fundo de Investimento'?'fii':(S.classes?.[code]||(['IVVB11','CHIP11','TECK11','GOLD11'].includes(code)?'global':'etfbr'));
       return{code,qty,cost:market,pm:qty?market/qty:0,trades:0,unmatched:0,cat,product:r.product,sourceGroup:r.group,institutions:[r.institution||''],owner:r.owner||(own==='spouse'?'spouse':'me'),reported:true};
     }).sort((a,b)=>b.cost-a.cost);
-    if(own==='family'){
-      const grouped=new Map();
-      for(const r of holdings){
-        const key=r.code;
-        if(!grouped.has(key)){grouped.set(key,{...r,owner:'family'});continue;}
-        const item=grouped.get(key);item.qty+=r.qty;item.cost+=r.cost;
-        item.institutions=[...new Set([...item.institutions,...r.institutions])];
-        item.pm=item.qty>0?item.cost/item.qty:0;
-      }
-      holdings=[...grouped.values()].sort((a,b)=>b.cost-a.cost);
-    }
     active=holdings.filter(r=>r.qty>0);
     total=Math.round(active.reduce((s,r)=>s+r.cost,0)*100)/100;
     cats=Object.fromEntries(CATS.map(x=>[x.id,0]));
@@ -253,7 +242,7 @@ return `<div class="v2shell"><aside class="v2side"><div class="v2logo"><i>↗</i
 function v2date(d){return d?String(d).split('-').reverse().join('/'):'—'}
 function v2pct(n,total){return total?pcent(n/total*100):'0%'}
 function v2hold(r){
-return `<button class="v2row v2rowbutton" data-asset="${h(r.code)}" data-asset-owner="${h(r.owner||'me')}"><span class="v2bubble">${r.sourceGroup==='Tesouro Direto'?'TD':h(r.code.slice(0,2))}</span><span class="v2rowinfo"><b>${h(r.product||r.code)}</b><small>${h(r.sourceGroup==='Tesouro Direto'?'Tesouro Direto':catname(r.cat))} · ${nfmt(r.qty,5)} un.</small></span><span class="v2rowright"><strong>${money(r.cost)}</strong><small>${r.reported?'Posição B3':'Estimado'}</small></span></button>`;
+return `<button class="v2row v2rowbutton" data-asset="${h(r.code)}" data-asset-owner="${h(r.owner||'me')}"><span class="v2bubble">${r.sourceGroup==='Tesouro Direto'?'TD':h(r.code.slice(0,2))}</span><span class="v2rowinfo"><b>${h(r.product||r.code)}</b><small>${ui.owner==='family'?(r.owner==='spouse'?'Esposa · ':'Minha · '):''}${h(r.sourceGroup==='Tesouro Direto'?'Tesouro Direto':catname(r.cat))} · ${nfmt(r.qty,5)} un.</small></span><span class="v2rowright"><strong>${money(r.cost)}</strong><small>${r.reported?'Posição B3':'Estimado'}</small></span></button>`;
 }
 function v2allocation(D){
 const cats=CATS.filter(c=>D.cats[c.id]>0).sort((a,b)=>D.cats[b.id]-D.cats[a.id]);if(!cats.length)return '<div class="v2empty">Importe uma posição B3 para ver a distribuição.</div>';
@@ -378,26 +367,31 @@ function v3profit(D){
 }
 function v3realized(){
  const trades=groupRecords('trade').slice().sort((a,b)=>dateOf(a).localeCompare(dateOf(b)));
- const cost=new Map();let realized=0,unmatched=0,sales=0;
+ const cost=new Map(),monthly={};let realized=0,unmatched=0,sales=0;
  for(const r of trades){
   const code=stripFrac(r.v[5]),q=num(r.v[6]),value=num(r.v[8]),act=norm(r.v[1]);
   if(!code||!Number.isFinite(q)||q<=0||!Number.isFinite(value)||value<0)continue;
-  const t=cost.get(code)||{qty:0,value:0};
+  const key=(r.owner==='spouse'?'spouse':'me')+'|'+code;
+  const t=cost.get(key)||{qty:0,value:0};
   if(act==='COMPRA'){t.qty+=q;t.value+=value;}
   if(act==='VENDA'){
-    sales++;const covered=Math.min(q,t.qty);
-    if(covered>0){const basis=t.value/t.qty*covered;realized+=value*covered/q-basis;t.qty-=covered;t.value-=basis;}
-    if(q>covered)unmatched+=q-covered;
+   sales++;
+   const covered=Math.min(q,t.qty);
+   if(covered>0){
+    const basis=t.value/t.qty*covered,profit=value*covered/q-basis;
+    realized+=profit;t.qty-=covered;t.value-=basis;
+    const month=dateOf(r).slice(0,7);monthly[month]=(monthly[month]||0)+profit;
+   }
+   if(q>covered)unmatched+=q-covered;
   }
-  cost.set(code,t);
+  cost.set(key,t);
  }
- return{realized,unmatched,sales,cost};
+ return {realized,unmatched,sales,cost,monthly};
 }
-
 function v3unrealized(D){
  const basis=v3realized().cost;let invested=0,unrealized=0,matched=0,missing=0;
  for(const r of D.active){
-   const item=basis.get(stripFrac(r.code)),q=Number(r.qty);
+   const item=basis.get((r.owner==='spouse'?'spouse':'me')+'|'+stripFrac(r.code)),q=Number(r.qty);
    if(!item||!q||item.qty<=0||Math.abs(item.qty-q)>Math.max(.0001,.002*q)){missing++;continue;}
    invested+=Math.max(0,item.value);unrealized+=r.cost-Math.max(0,item.value);matched++;
  }
