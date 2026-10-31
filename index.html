@@ -303,7 +303,7 @@ return `<section class="v2panel"><div class="v2section"><h2>Visão geral</h2><sp
 }
 function v2files(D){
 const p=D.reported;
-return `<section class="v2panel"><div class="v2upload" id="drop-zone"><div style="font-size:35px;color:#0c805d">⇧</div><strong>Importar arquivo Excel</strong><p class="v2muted" style="margin-bottom:18px">Negociações, movimentações ou posição atual.</p><button class="v2btn" data-act="open-import">Selecionar .xlsx</button></div><p class="v2note">Duplicados não são adicionados novamente.</p>${ui.report?`<div class="v2callout" style="margin-top:16px;white-space:pre-line">${h(ui.report)}</div>`:''}</section><section class="v2panel"><div class="v2section"><h2>Como funciona?</h2></div>${[['1','Negociação','Compras e vendas'],['2','Movimentação','Proventos e eventos'],['3','Posição','Atualiza patrimônio sem somar compras novamente']].map(([a,b,c])=>`<div class="v2row"><span class="v2bubble">${a}</span><span class="v2rowinfo"><b>${b}</b><small>${c}</small></span></div>`).join('')}</section><section class="v2panel"><div class="v2section"><h2>Última posição B3</h2></div><div class="v2value">${p?money(p.total):'—'}</div><p class="v2muted">${p?p.rows.length+' posições · '+v2date(p.date):'Sem posição'}</p></section><section class="v2panel"><div class="v2section"><h2>Backup e exportação</h2></div><div class="v2quick"><button class="v2btn" data-act="backup">Backup completo</button><button class="v2btn outline" data-act="import-backup">Restaurar JSON</button><button class="v2btn outline" data-act="export-trade">Excel negociação</button><button class="v2btn outline" data-act="export-mov">Excel movimentação</button></div></section>`;
+return `<section class="v2panel"><div class="v2upload" id="drop-zone"><div style="font-size:35px;color:#0c805d">⇧</div><strong>Importar arquivo Excel</strong><p class="v2muted" style="margin-bottom:18px">Negociações, movimentações ou posição atual.</p><div class="v2importcontrols"><label for="v2-import-owner" style="display:block;font-weight:750;font-size:13px;text-align:left;margin:10px 0 7px">Importar para</label><select id="v2-import-owner" class="v2field" aria-label="Titular dos investimentos"><option value="me" ${(ui.importOwner||'me')==='me'?'selected':''}>Minha carteira</option><option value="spouse" ${ui.importOwner==='spouse'?'selected':''}>Carteira da minha esposa</option></select><label for="v2-file-input" style="display:block;font-weight:750;font-size:13px;text-align:left;margin:16px 0 7px">Arquivo da B3</label><input id="v2-file-input" name="b3" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple aria-label="Selecione uma ou mais planilhas XLSX da B3" style="display:block;width:100%;max-width:100%;padding:13px;border:1px solid #c7e2d3;background:#fff;border-radius:12px;color:#174f3b;font-size:13px"></div></div><p class="v2note">Escolha o titular e selecione os arquivos. Negociação, Movimentação e Posição da B3. Registros repetidos são ignorados.</p>${ui.report?`<div class="v2callout" style="margin-top:16px;white-space:pre-line">${h(ui.report)}</div>`:''}</section><section class="v2panel"><div class="v2section"><h2>Como funciona?</h2></div>${[['1','Negociação','Compras e vendas'],['2','Movimentação','Proventos e eventos'],['3','Posição','Atualiza patrimônio sem somar compras novamente']].map(([a,b,c])=>`<div class="v2row"><span class="v2bubble">${a}</span><span class="v2rowinfo"><b>${b}</b><small>${c}</small></span></div>`).join('')}</section><section class="v2panel"><div class="v2section"><h2>Última posição B3</h2></div><div class="v2value">${p?money(p.total):'—'}</div><p class="v2muted">${p?p.rows.length+' posições · '+v2date(p.date):'Sem posição'}</p></section><section class="v2panel"><div class="v2section"><h2>Backup e exportação</h2></div><div class="v2quick"><button class="v2btn" data-act="backup">Backup completo</button><button class="v2btn outline" data-act="import-backup">Restaurar JSON</button><button class="v2btn outline" data-act="export-trade">Excel negociação</button><button class="v2btn outline" data-act="export-mov">Excel movimentação</button></div></section>`;
 }
 function v2records(D){
 const t=ui.kind||'trade';let records=groupRecords(t).filter(x=>!ui.search||norm(x.v.join(' ')).includes(norm(ui.search))).sort((a,b)=>dateOf(b).localeCompare(dateOf(a)));
@@ -518,7 +518,7 @@ function parsePositionSheet(rows){
 }
 async function importExcel(files){
  let count=0,dups=0,invalid=0,positionCount=0,details=[];
- const owner=ui.owner||'me';if(owner==='family'){toast('Escolha Minha ou Esposa antes de importar.',true);return;}const known=new Set(S.records.filter(r=>(r.owner||'me')===owner).map(r=>fingerprint(r.t,r.v)));
+ const owner=ui.importOwner==='spouse'?'spouse':'me';const known=new Set(S.records.filter(r=>(r.owner||'me')===owner).map(r=>fingerprint(r.t,r.v)));
  for(const file of Array.from(files)){
   if(!/\.xlsx$/i.test(file.name)){details.push(file.name+': somente XLSX.');continue;}
   try{
@@ -568,8 +568,10 @@ async function importExcel(files){
  }
  if(count||positionCount)save();
  ui.report='Importação: '+count+' novos no histórico; '+positionCount+' posições atualizadas; '+dups+' duplicados ignorados; '+invalid+' inválidos.\n'+details.join('\n');
+ if(positionCount)ui.owner=owner;
  page=positionCount?'portfolio':'files';ui.kind='trade';render();
- toast(positionCount?'Posição atualizada: '+money(S.positionSnapshot.total):count+' novos, '+dups+' repetidos bloqueados.',!count&&!positionCount);
+ const lastSnapshot=owner==='spouse'?S.spousePositionSnapshot:S.positionSnapshot;
+ toast(positionCount?'Posição atualizada: '+money(lastSnapshot?.total||0):count+' novos, '+dups+' repetidos bloqueados.',!count&&!positionCount);
 }
 function download(blob,name){const link=document.createElement('a'),url=URL.createObjectURL(blob);link.href=url;link.download=name;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);}
 function exportSheet(t){const rows=groupRecords(t).slice().sort((a,b)=>dateOf(b).localeCompare(dateOf(a))).map(r=>r.v);const title=t==='trade'?'Negociação':'Movimentação',file=t==='trade'?'negociacao':'movimentacao';const blob=Excel.create(title,[header(t),...rows]);download(blob,`${file}-moneytracker-${new Date().toISOString().slice(0,10)}.xlsx`);toast(`Exportados ${rows.length} registros de ${title} no formato B3.`);}
@@ -598,7 +600,7 @@ function dispatch(e){
   const del=e.target.closest('[data-delete]');if(del){const r=S.records.find(x=>x.id===del.dataset.delete);if(r&&confirm('Excluir definitivamente este registro?')){S.records=S.records.filter(x=>x.id!==r.id);save();render();toast('Registro excluído.');}return;}
   const a=e.target.closest('[data-act]');if(!a)return;const act=a.dataset.act;
   if(act==='v3-benchmark'){v3benchmarks();return;}
-  if(act==='open-import'){if(ui.owner==='family'){toast('Selecione Minha ou Esposa para importar os dados separados.',true);return;}$('#file-input').click();return;}if(act==='add-trade'||act==='add-mov'){ui.modal={t:act==='add-mov'?'mov':'trade'};renderModal();return;}
+  if(act==='open-import'){if(page!=='files'){page='files';render();}const nativeFile=$('#v2-file-input');if(nativeFile){nativeFile.click();nativeFile.focus();}else toast('Abra a aba Importar e selecione um arquivo XLSX.',true);return;}if(act==='add-trade'||act==='add-mov'){ui.modal={t:act==='add-mov'?'mov':'trade'};renderModal();return;}
   if(act==='close-modal'){ui.modal=null;$('.modal-bg')?.remove();return;}
   if(act==='show-more'){ui.pageLimit+=80;render();return;}
   if(act==='export-trade'||act==='export-mov'){exportSheet(act==='export-trade'?'trade':'mov');return;}
@@ -637,9 +639,10 @@ document.addEventListener('submit',e=>{
   if(e.target.id==='target-form'){e.preventDefault();const d=new FormData(e.target),t={};for(const c of CATS)t[c.id]=Number(d.get(c.id)||0);const tot=Object.values(t).reduce((a,b)=>a+b,0);if(Math.abs(tot-100)>.01){toast('A distribuição precisa somar exatamente 100%. Soma atual: '+nfmt(tot,1)+'%.',true);return;}S.targets=t;save();render();toast('Distribuição-alvo atualizada.');return;}
   if(e.target.id==='goal-form'){e.preventDefault();const d=new FormData(e.target);S.goal={name:txt(d.get('name')),amount:Number(d.get('amount')),months:Number(d.get('months')),monthly:Number(d.get('monthly')),profile:txt(d.get('profile'))};save();render();toast('Objetivo atualizado.');return;}
 });
-document.addEventListener('change',e=>{if(e.target.matches('#pf')){ui.portfolioFilter=e.target.value;render();}if(e.target.matches('[data-class]')){S.classes[e.target.dataset.class]=e.target.value;save();render();toast('Classificação do ativo ajustada.');}});
+document.addEventListener('change',e=>{if(e.target.matches('#v2-import-owner')){ui.importOwner=e.target.value;return;}if(e.target.matches('#pf')){ui.portfolioFilter=e.target.value;render();}if(e.target.matches('[data-class]')){S.classes[e.target.dataset.class]=e.target.value;save();render();toast('Classificação do ativo ajustada.');}});
 document.addEventListener('input',e=>{if(e.target.matches('#search')){const val=e.target.value,sel=e.target.selectionStart;ui.search=val;render();const field=$('#search');field?.focus();field?.setSelectionRange(sel,sel);}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&ui.modal){ui.modal=null;$('.modal-bg')?.remove();}});
+document.addEventListener('change',async e=>{if(e.target?.id==='v2-file-input'){const selected=Array.from(e.target.files||[]);if(selected.length){try{await importExcel(selected);}catch(err){ui.report='Falha na importação: '+(err?.message||err);page='files';render();toast(ui.report,true);}}if(e.target.isConnected)e.target.value='';}});
 $('#file-input').addEventListener('change',async e=>{if(e.target.files.length)await importExcel(e.target.files);e.target.value='';});
 $('#backup-input').addEventListener('change',async e=>{if(e.target.files.length)await restoreBackup(e.target.files[0]);e.target.value='';});
 document.addEventListener('dragover',e=>{if(e.dataTransfer?.types?.includes('Files')){e.preventDefault();$('#drop-zone')?.classList.add('drag');}});
