@@ -421,3 +421,47 @@ html[data-theme="dark"] .mt7-auth-status{color:#ff9dab}
   html[data-theme="dark"] .m8-kpis>.m8-metric:first-child strong{color:#cadbff}
 }
 
+
+/* MoneyTracker 2.4 — quote coverage, per-asset prices and sourcing */
+.m8-quote-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:4px 0 14px}
+.m8-quote-summary>div{display:flex;flex-direction:column;gap:7px;background:#f4f7ff;border:1px solid #e4eafa;border-radius:12px;padding:12px;min-width:0}
+.m8-quote-summary small{font-size:11px;color:#7f91ab;font-weight:650;line-height:1.4}
+.m8-quote-summary strong{font-size:clamp(14px,2vw,22px);color:#304c7f;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.m8-quote-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:4px 0}
+.m8-quote-controls>span{font-size:11px;color:#7285a0;flex:1;line-height:1.5}
+.m8-quote-errors{margin-top:10px;padding:11px 12px;border:1px solid #f5dabc;border-radius:11px;background:#fff8ef;color:#906636}
+.m8-quote-errors b{font-size:12px}.m8-quote-errors p{font-size:12px;margin:5px 0;overflow-wrap:anywhere}.m8-quote-errors small{font-size:11px}
+.m8-quote-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:13px 0;border-bottom:1px solid #e7eef8}
+.m8-quote-row:last-child{border-bottom:0}
+.m8-quote-name{display:flex;flex-direction:column;gap:4px;min-width:0}
+.m8-quote-name>b{font-size:13px}.m8-quote-name small{font-size:11px;color:#7c91ad;line-height:1.4;overflow-wrap:anywhere}
+.m8-quote-prices{display:flex;flex-direction:column;gap:4px;text-align:right;min-width:95px}
+.m8-quote-prices b{font-size:13px}.m8-quote-prices strong{font-size:13px;color:#159b80}
+.m8-quote-row>.m8-btn{min-height:40px}
+.m8-panel .m8-hint a{color:#4778d8;text-decoration:underline;text-underline-offset:2px}
+html[data-theme="dark"] .m8-quote-summary>div{background:#1b2d46;border-color:#344968}
+html[data-theme="dark"] .m8-quote-summary small,
+html[data-theme="dark"] .m8-quote-controls>span,
+html[data-theme="dark"] .m8-quote-name small{color:#b4c5dd}
+html[data-theme="dark"] .m8-quote-summary strong,
+html[data-theme="dark"] .m8-quote-name>b,
+html[data-theme="dark"] .m8-quote-prices b{color:#ecf3ff}
+html[data-theme="dark"] .m8-quote-prices strong{color:#79e6bf}
+html[data-theme="dark"] .m8-quote-errors{background:#443123;border-color:#785332;color:#ffe0af}
+html[data-theme="dark"] .m8-quote-row{border-bottom-color:#30415a}
+html[data-theme="dark"] .m8-panel .m8-hint a{color:#a9c2ff}
+@media(max-width:790px){
+ .m8-quote-summary{gap:7px}
+ .m8-quote-summary>div{padding:10px;gap:6px}
+ .m8-quote-summary small{font-size:10px}
+ .m8-quote-summary strong{font-size:clamp(13px,3.5vw,19px)}
+ .m8-quote-row{grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:12px 0}
+ .m8-quote-row>.m8-btn{grid-column:1/-1;width:100%;min-height:42px}
+ .m8-quote-prices{min-width:95px}
+ .m8-quote-controls>.m8-btn{width:100%;min-height:45px}
+ .m8-quote-controls>span{width:100%}
+}
+@media(max-width:370px){
+ .m8-quote-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .m8-quote-summary>div:last-child{grid-column:1/-1}
+}
