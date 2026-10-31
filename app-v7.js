@@ -204,7 +204,7 @@ function reconciliationCard(pendenciesOnly=false){
   const y23=years.find(x=>x.year===2023);
   if(y23){
    out+=card(titlebar('Rendimentos de 2023 · Jessica')+
-    '<p><b>'+money(y23.importedAmount)+'</b> confirmados em 113 pagamentos da Rico e incluídos no histórico. A B3 informa '+money(y23.amount)+'; diferença de <b>'+money(y23.missingAmount)+'</b> ainda não localizada, portanto não inventada.</p>');
+    '<p><b>'+money(y23.importedAmount)+'</b> confirmados em 113 pagamentos da Rico e incluídos no histórico. A B3 informa '+money(y23.amount)+'; diferença de <b>'+money(y23.missingAmount)+'</b>. '+esc(y23.differenceExplanation||'A diferença anual não é somada sem data individual de pagamento comprovada.')+'</p>');
   }
  }
  return out;
