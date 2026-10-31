@@ -68,19 +68,31 @@ E.gaps=function(state,owner='family',today=E.isoNow()){
  const historical=state&&state.spouseHistoricalPosition;
  const revised=base.map(issue=>{
   if(issue.owner==='me'&&issue.code==='cost-reconcile'){
-   const led=E.ledger(state,'me'),portfolio=E.portfolio(state,'me');
-   const entries=portfolio.holdings.filter(h=>{
+   const led=E.ledger(state,'me'),port=E.portfolio(state,'me');
+   const entries=port.holdings.filter(h=>{
     if(h.group==='Tesouro')return !(h.applied>0);
     if(h.origin!=='position'&&h.origin!=='quote')return true;
-    const b=led.stocks.get(h.owner+'|'+E.codeOf(h.code));
-    return !(b&&!b.uncertain&&b.qty>0&&Math.abs(b.qty-h.qty)<=Math.max(.00001,.002*h.qty));
+    const rec=led.stocks.get('me|'+E.codeOf(h.code));
+    return !(rec&&!rec.uncertain&&rec.qty>0&&Math.abs(rec.qty-h.qty)<=Math.max(.00001,.002*h.qty));
    });
-   return {...issue,title:'Conciliar '+entries.length+' posições atuais de Samuel: '+entries.map(x=>x.code).join(', '),
-    why:'A posição B3 de 31/10/2026 já foi importada. '+entries.map(h=>{
-     const b=led.stocks.get('me|'+E.codeOf(h.code));
-     return h.code+': B3 '+h.qty+' unidade(s), histórico '+(b?b.qty:'sem custo anterior');
-    }).join('; ')+'.',
-    action:'Verificar somente as diferenças de quantidade/custo desses ativos; não é necessário reenviar as compras e vendas já conciliadas.'};
+   const recent=entries.filter(h=>['BOVA11','BEST11'].includes(h.code)).map(h=>{
+    const raw=state.records.filter(r=>r.t==='trade'&&r.owner==='me'&&
+      r.v[1]==='Compra'&&E.codeOf(r.v[5])===h.code&&r.v[0]==='28/10/2026');
+    const bought=raw.reduce((sum,r)=>sum+Number(r.v[6]||0),0);
+    const ledQty=led.stocks.get('me|'+E.codeOf(h.code))?.qty||0;
+    return{code:h.code,bought,position:h.qty,ledger:ledQty,exact:Math.abs(ledQty-h.qty-bought)<.000001};
+   });
+   const explained=recent.filter(x=>x.exact&&x.bought>0);
+   const irim=entries.find(x=>x.code==='IRIM11');
+   const unresolved=entries.filter(x=>!explained.some(y=>y.code===x.code));
+   const words=explained.map(x=>x.code+': posição '+x.position+' e compra de '+x.bought+
+      ' unidades em 28/10/2026, já registrada no histórico');
+   if(irim)words.push('IRIM11: origem confirmada na liquidação de IRDM11 (82 cotas geraram 72 IRIM11 e fração leiloada); custo fiscal da reorganização precisa ser tratado separadamente');
+   return {...issue,level:'warning',code:'reconcile-position-timing',
+    title:explained.length+' divergências de posição explicadas por compras recentes'+
+      (unresolved.length?' e '+unresolved.length+' conversão(ões)/custo(s) ainda a calcular':''),
+    why:'Não faltam comprovantes das compras recentes. '+words.join('. ')+'.',
+    action:'Não reenvie BOVA11 ou BEST11. Confirme apenas uma posição B3 atualizada após essas compras para o valor de mercado. A origem IRIM11 já foi localizada em 2025; falta aplicar o custo fiscal sem misturar a amortização.'};
   }
   if(issue.owner!=='spouse'||issue.code!=='missing-position'||!historical?.rows?.length)return issue;
   return {...issue,level:'warning',code:'historical-spouse-position',
