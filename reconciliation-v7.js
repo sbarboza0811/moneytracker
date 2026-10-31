@@ -67,6 +67,21 @@ E.gaps=function(state,owner='family',today=E.isoNow()){
  // não uma cotação para 2026. O aviso nunca deve solicitar o mesmo arquivo.
  const historical=state&&state.spouseHistoricalPosition;
  const revised=base.map(issue=>{
+  if(issue.owner==='me'&&issue.code==='cost-reconcile'){
+   const led=E.ledger(state,'me'),portfolio=E.portfolio(state,'me');
+   const entries=portfolio.holdings.filter(h=>{
+    if(h.group==='Tesouro')return !(h.applied>0);
+    if(h.origin!=='position'&&h.origin!=='quote')return true;
+    const b=led.stocks.get(h.owner+'|'+E.codeOf(h.code));
+    return !(b&&!b.uncertain&&b.qty>0&&Math.abs(b.qty-h.qty)<=Math.max(.00001,.002*h.qty));
+   });
+   return {...issue,title:'Conciliar '+entries.length+' posições atuais de Samuel: '+entries.map(x=>x.code).join(', '),
+    why:'A posição B3 de 31/10/2026 já foi importada. '+entries.map(h=>{
+     const b=led.stocks.get('me|'+E.codeOf(h.code));
+     return h.code+': B3 '+h.qty+' unidade(s), histórico '+(b?b.qty:'sem custo anterior');
+    }).join('; ')+'.',
+    action:'Verificar somente as diferenças de quantidade/custo desses ativos; não é necessário reenviar as compras e vendas já conciliadas.'};
+  }
   if(issue.owner!=='spouse'||issue.code!=='missing-position'||!historical?.rows?.length)return issue;
   return {...issue,level:'warning',code:'historical-spouse-position',
    title:'Posição histórica da Jessica recebida; valor atual de 2026 ainda sem confirmação',
