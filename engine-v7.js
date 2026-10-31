@@ -15,6 +15,7 @@ const number=x=>{
  return Number(s);
 };
 const money=x=>MONEY.format(Number(x)||0);
+const roundMoney=x=>Math.sign(x)*Math.round(Math.abs(x)*100+1e-9)/100;
 const fmt=x=>new Intl.NumberFormat('pt-BR',{maximumFractionDigits:5}).format(Number(x)||0);
 const dateISO=value=>{
  if(typeof value==='number'&&value>=1&&value<100000){const d=new Date(Date.UTC(1899,11,30)+Math.round(value)*86400000);return d.toISOString().slice(0,10);}
@@ -237,8 +238,8 @@ function gains(state,owner='family',period='all',today=isoNow()){
  const recognizedSales=sales.filter(x=>x.recognized&&Number.isFinite(x.profit));
  const excludedSales=sales.filter(x=>!x.recognized);
  const payouts=dividendRows(state,owner).filter(x=>x.date>=from&&x.date<=today);
- const realized=recognizedSales.reduce((n,x)=>n+x.profit,0);
- const dividends=payouts.reduce((n,x)=>n+x.amount,0);
+ const realized=roundMoney(recognizedSales.reduce((n,x)=>n+x.profit,0));
+ const dividends=roundMoney(payouts.reduce((n,x)=>n+x.amount,0));
  let openGain=0,matched=0,missing=0,tesouroMatched=0;
  for(const h of port.holdings){
   if(h.origin!=='position'&&h.origin!=='quote'){missing++;continue;}
@@ -255,9 +256,10 @@ function gains(state,owner='family',period='all',today=isoNow()){
   if(!basis||basis.uncertain||basis.qty<=0||Math.abs(basis.qty-h.qty)>tolerance){missing++;continue;}
   matched++;openGain+=h.value-basis.cost;
  }
+ openGain=roundMoney(openGain);
  const openAvailable=period==='all'&&matched>0;
  const openIncluded=openAvailable?openGain:0;
- const profit=realized+dividends+openIncluded;
+ const profit=roundMoney(realized+dividends+openIncluded);
  const unmatched=[...led.problems,...bonds.problems].filter(p=>p.date<=today);
  const missingWindow=period!=='all';
  const complete=port.holdings.length>0&&missing===0&&unmatched.length===0&&excludedSales.length===0&&period==='all';
