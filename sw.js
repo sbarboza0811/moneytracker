@@ -1,5 +1,5 @@
 /* MoneyTracker v7: offline APP SHELL only. Never cache user financial data or Supabase responses. */
-const CACHE='moneytracker-shell-v8-profit';
+const CACHE='moneytracker-shell-v9-profit';
 const SHELL=['./','./index.html','./app-v7.css','./engine-v7.js','./app-v7.js','./cloud-v7.js','./excel-v7.js','./config.js','./install-v7.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('moneytracker-shell-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
