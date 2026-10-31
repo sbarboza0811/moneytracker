@@ -149,7 +149,7 @@ function home(){
  card(titlebar('Evolução patrimonial','profit')+evolutionChart(ui.owner))+
  card(titlebar('Evolução do resultado','profit')+monthlyChart(g))+
  '<div class="mt7-actionrow"><button type="button" class="mt7-btn secondary" data-nav="needs">Analisar pendências</button></div>'+
- '<div class="mt7-actionrow"><button class="mt7-btn" data-nav="import">Importar B3</button><button class="mt7-btn secondary" data-nav="income">Proventos</button><button class="mt7-btn ghost" data-nav="insights">Análises</button></div>';
+ '<div class="mt7-actionrow"><button class="mt7-btn" data-nav="profit">Ver vendas por classe e lucro/prejuízo</button><button class="mt7-btn" data-nav="import">Importar B3</button<button class="mt7-btn secondary" data-nav="income">Proventos</button><button class="mt7-btn ghost" data-nav="insights">Análises</button></div>';
 }
 function portfolio(){
  const p=E.portfolio(S,ui.owner);
@@ -254,7 +254,7 @@ function profitDetails(){
    (open?x.assets.sort((a,b)=>Math.abs(b.profit)-Math.abs(a.profit)).map(assetRow).join(''):''));
  }).join('');
  return card(titlebar('Operações que compõem o lucro')+'<p>Vendas: <b>'+money(d.realized)+'</b> · Proventos: <b>'+money(d.dividends)+'</b> · Total realizado: <b>'+money(d.realized+d.dividends)+'</b>.</p><p>'+d.sales.length+' vendas · '+d.payouts.length+' pagamentos · '+d.excluded+' vendas sem custo comprovado.</p><button type="button" class="mt7-btn secondary" data-detail="income">Ver proventos individualmente</button>')+selected+
- card(titlebar('Lucro e prejuízo por classe')+'<p class="mt7-footnote">Agrupado por tipo de investimento. Toque na classe para expandir os ativos e depois toque no ativo para ver as operações.</p>')+
+ card(titlebar('Vendas agrupadas por classe — ações, FIIs, ETFs e Tesouro')+'<p class="mt7-footnote">Agrupado por tipo de investimento. Toque na classe para expandir os ativos e depois toque no ativo para ver as operações.</p>')+
  (classRows||card('<p>Não houve vendas neste período.</p>'));
 }
 function profit(){
