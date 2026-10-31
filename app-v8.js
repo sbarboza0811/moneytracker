@@ -135,7 +135,8 @@ function quoteUpdateControls(){
 }
 function assetRow(h,d){
  const b=basisFor(h,d.ledger),gain=b.verified?money(h.value-b.cost):'—';
- return '<button class="m8-asset-row" data-asset="'+escape(h.owner+'|'+h.code)+'"><span class="m8-token">'+escape(h.fixedIncome?'RF':h.code.slice(0,2))+'</span><span class="m8-asset-title"><strong>'+escape(h.code)+'</strong><small>'+escape(me(h.owner))+' · '+escape(group(h.code,h.group))+(h.fixedIncome?' · Saldo nominal':'')+'</small></span><span class="m8-asset-money"><strong>'+money(h.value)+'</strong><small class="'+(b.verified?'positive':'muted')+'">'+gain+'</small></span><b>›</b></button>';
+ const q=quoteMeta(h.code),priceInfo=!h.fixedIncome&&q.fresh?' · '+money(q.quote.price)+'/un.':'';
+ return '<button class="m8-asset-row" data-asset="'+escape(h.owner+'|'+h.code)+'"><span class="m8-token">'+escape(h.fixedIncome?'RF':h.code.slice(0,2))+'</span><span class="m8-asset-title"><strong>'+escape(h.code)+'</strong><small>'+escape(me(h.owner))+' · '+escape(group(h.code,h.group))+(h.fixedIncome?' · Saldo nominal':'')+priceInfo+'</small></span><span class="m8-asset-money"><strong>'+money(h.value)+'</strong><small class="'+(b.verified?'positive':'muted')+'">'+gain+'</small></span><b>›</b></button>';
 }
 function kpi(d){return '<div class="m8-kpis">'+iconStat('Patrimônio representado',money(d.total),d.holdings.length+' posições · valores de fontes diferentes','blue','portfolio')+iconStat('Resultado realizado',money(d.realized+d.dividends),'Vendas + proventos do período','teal','result')+iconStat('Proventos',money(d.dividends),d.payouts.length+' pagamentos','violet','income')+iconStat('Valorização apurada',d.openGain.matched?money(d.openGain.gain):'—',d.openGain.missing+' posições sem valorização','orange','flow')+'</div>';}
 function trendPositions(){
@@ -374,7 +375,10 @@ function pageAsset(){
  trades.slice(0,50).map(r=>'<div class="m8-tx"><div><b>'+escape(r.t==='trade'?r.v[1]:r.v[2])+'</b><small>'+E.dateBR(E.recordDate(r))+' · '+escape(r.v[4]||'')+'</small></div><strong>'+money(Number(r.v[r.t==='trade'?8:7]))+'</strong></div>').join('')+
  (!fixed.length&&!trades.length?empty('Nenhuma operação vinculada.'):'') )+
  (sales.length?box(header('Vendas e lucro','Clique para ver a apuração')+sales.slice(0,30).map(saleRow).join('')):'')+
- (!h.fixedIncome?box(header('Cotação consultada','Apenas cotações disponíveis do provedor')+'<p>'+(S.quotes?.[h.code]?money(S.quotes[h.code].price):'Sem cotação consultada')+'</p><button class="m8-btn sub" data-quote="'+escape(h.code)+'">Consultar</button>'):'');
+ (!h.fixedIncome?box(header('Cotação do ativo','Preço unitário × quantidade (quando cotação disponível)')+
+ '<p><strong>'+(quoteMeta(h.code).fresh?money(quoteMeta(h.code).quote.price):'Sem cotação válida')+'</strong> / unidade · '+fmt(h.qty)+' unidade(s)</p>'+
+ (quoteMeta(h.code).fresh?'<p>Valor calculado: <b>'+money(h.qty*Number(quoteMeta(h.code).quote.price))+'</b> · '+escape(quoteMeta(h.code).quote.provider)+' · '+escape(E.dateBR(quoteMeta(h.code).quote.marketDate||String(quoteMeta(h.code).quote.at).slice(0,10)))+'</p>':'<p>Usando o valor de origem até encontrar cotação válida.</p>')+
+ '<button class="m8-btn sub" data-quote="'+escape(h.code)+'" '+(U.quoteLoading?'disabled':'')+'>Atualizar cotação</button>'):'');
 }
 function pageSale(){
  const d=initialData(U.owner),s=(d.d?.sales||[]).find(x=>[x.owner,x.code,x.date,x.qty,x.gross].join('|')===U.saleId);
