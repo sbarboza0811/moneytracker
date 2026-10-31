@@ -166,6 +166,17 @@ function activity(){
       let cat=r.group==='Tesouro Direto'?'rf':r.group==='Fundo de Investimento'?'fii':(S.classes?.[code]||(['IVVB11','CHIP11','TECK11','GOLD11'].includes(code)?'global':'etfbr'));
       return{code,qty,cost:market,pm:qty?market/qty:0,trades:0,unmatched:0,cat,product:r.product,sourceGroup:r.group,institutions:[r.institution||''],owner:r.owner||(own==='spouse'?'spouse':'me'),reported:true};
     }).sort((a,b)=>b.cost-a.cost);
+    if(own==='family'){
+      const grouped=new Map();
+      for(const r of holdings){
+        const key=r.code;
+        if(!grouped.has(key)){grouped.set(key,{...r,owner:'family'});continue;}
+        const item=grouped.get(key);item.qty+=r.qty;item.cost+=r.cost;
+        item.institutions=[...new Set([...item.institutions,...r.institutions])];
+        item.pm=item.qty>0?item.cost/item.qty:0;
+      }
+      holdings=[...grouped.values()].sort((a,b)=>b.cost-a.cost);
+    }
     active=holdings.filter(r=>r.qty>0);
     total=Math.round(active.reduce((s,r)=>s+r.cost,0)*100)/100;
     cats=Object.fromEntries(CATS.map(x=>[x.id,0]));
