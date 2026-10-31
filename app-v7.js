@@ -27,8 +27,8 @@ function layout(content){
  '<aside class="mt7-side"><div class="mt7-brand"><i>↗</i><span>money<span>tracker</span></span></div>'+
  '<nav>'+NAV.map(n=>'<button type="button" data-nav="'+n[0]+'" class="'+(ui.page===n[0]?'active':'')+'"><span class="ico">'+n[1]+'</span>'+n[2]+'</button>').join('')+
  '<button data-nav="more"><span class="ico">☰</span>Mais</button></nav>'+
- '<div class="foot">Seus investimentos, no seu controle.<div class="mt7-version">MoneyTracker 7.6 · Dados privados</div></div></aside>'+
- '<main class="mt7-body"><header class="mt7-top"><div><div class="mt7-eyebrow">MoneyTracker / Versão 7.6</div><h1>'+pages[ui.page]+'</h1></div>'+
+ '<div class="foot">Seus investimentos, no seu controle.<div class="mt7-version">MoneyTracker 7.7 · Dados privados</div></div></aside>'+
+ '<main class="mt7-body"><header class="mt7-top"><div><div class="mt7-eyebrow">MoneyTracker / Versão 7.7</div><h1>'+pages[ui.page]+'</h1></div>'+
  '<div class="mt7-top-actions"><button data-nav="needs" title="O que falta para completar" class="mt7-iconbtn" aria-label="Pendências">☑</button>'+
  '<button data-nav="more" title="Conta, backup e sincronização" class="mt7-iconbtn" aria-label="Mais">☰</button></div></header>'+
  '<div class="mt7-owners" role="group" aria-label="Selecionar carteira">'+ownerButton('family','Família')+ownerButton('me','Minha')+ownerButton('spouse','Esposa')+'</div>'+
@@ -48,12 +48,12 @@ function sourceSplit(p){
  }).join('')+'</div>';
 }
 function profitCards(g,p){
- const openLabel=ui.period==='all'?(g.openGain===null?'—':money(g.openGain)):'Não apurado';
+ const openLabel=ui.period==='all'?(g.openGain===null?'Não apurado':money(g.openGain)):'Não apurado';
  return '<div class="mt7-cards3">'+
- stat('Lucro nas vendas',money(g.realized),g.sales+' vendas com custo comprovado','profit')+
- stat('Proventos recebidos',money(g.dividends),g.payments+' pagamentos','income')+
- stat('Ganho em aberto',openLabel,ui.period==='all'?g.matched+' posições com custo conciliado':'Requer preços históricos','profit')+
- stat('Capital investido (posição)',money(p.total),p.valuation==='mixed'?'B3 + custo histórico':'Total da carteira','portfolio')+
+ stat('Lucro nas vendas · apurado',money(g.realized),g.sales+' vendas com custo verificado','profit')+
+ stat('Proventos identificados',money(g.dividends),g.payments+' pagamentos','income')+
+ stat('Valorização em aberto · parcial',openLabel,ui.period==='all'?g.matched+' posições avaliadas':'Faltam preços históricos','profit')+
+ stat('Valor da posição',money(p.total),p.valuation==='mixed'?'B3 + estimativa histórica':'Valor conforme fontes disponíveis','portfolio')+
  '</div>';
 }
 function periodFilters(){
@@ -62,16 +62,15 @@ function periodFilters(){
  '<button type="button" data-period="'+v+'" aria-pressed="'+String(ui.period===v)+'" class="'+(ui.period===v?'active':'')+'">'+label+'</button>').join('')+'</div>';
 }
 function profitSummary(g){
- const salesPending=Number(g.excludedSales||0);
- const ready=g.complete,cl=ready||salesPending===0?'':'warn';
- const label=ready?'Resultado completo':salesPending?
-  salesPending+' vendas sem custo confirmado':'Vendas conciliadas · avaliação parcial';
- return card(titlebar('Lucro identificado · '+E.periodLabel[ui.period],'profit','Detalhar')+
+ const incomplete=!g.complete||g.partial||g.excludedSales>0||g.missing>0;
+ const message=incomplete?'Lucro total não verificável':'Lucro total apurado';
+ const display=incomplete?'Não apurado':money(g.profit);
+ return card(titlebar('Resultados · '+E.periodLabel[ui.period],'profit','Detalhar')+
  periodFilters()+
- '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px"><div class="mt7-mainnumber">'+money(g.profit)+'</div><span class="mt7-pill '+cl+'">'+label+'</span></div>'+
- '<p class="mt7-label">Ganho em vendas e dividendos no período'+(ui.period==='all'?', mais ganho em aberto de posições conciliadas':'')+'.</p>'+
+ '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px"><div class="mt7-mainnumber">'+display+'</div><span class="mt7-pill '+(incomplete?'warn':'')+'">'+message+'</span></div>'+
+ '<p class="mt7-label">'+(incomplete?'Abaixo, somente parcelas identificáveis. Não representam o lucro total do período.':'Resultado integral com custos e preços confirmados.')+'</p>'+
  (g.warning?'<div class="mt7-note warning" style="margin-top:13px">'+esc(g.warning)+'</div>':'')+
- (ui.period!=='all'?'<p class="mt7-footnote">Este filtro NÃO inclui variação das posições abertas sem preço no começo do período.</p>':''));
+ (incomplete?'<div class="mt7-note warning" style="margin-top:13px">Para o lucro total é necessário conciliar custo de aquisição, vendas não verificadas e valores históricos das posições. Acesse <button type="button" data-nav="needs">Pendências ›</button>. Nenhum valor desconhecido foi estimado como lucro.</div>':''));
 }
 function holdingsRows(p,limit=7){
  const holdings=p.holdings.slice(0,limit);
@@ -381,7 +380,7 @@ function more(){
  '<div class="mt7-actionrow"><button class="mt7-btn" data-action="backup">Exportar backup JSON</button>'+
  '<button class="mt7-btn ghost" data-action="restore-pick">Restaurar backup</button></div>'+
  '<input type="file" id="mt7-restore-file" accept="application/json,.json" hidden>'+
- '<p class="mt7-footnote">Versão 7.6 · Não altera a conta ou os dados de outros projetos.</p>');
+ '<p class="mt7-footnote">Versão 7.7 · Não altera a conta ou os dados de outros projetos.</p>');
 }
 function render(){
  const app=document.getElementById('mt7-app');if(!app)return;
