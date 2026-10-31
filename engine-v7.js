@@ -288,11 +288,11 @@ function gains(state,owner='family',period='all',today=isoNow()){
  const payouts=dividendRows(state,owner).filter(x=>x.date>=from&&x.date<=today);
  const realized=roundMoney(recognizedSales.reduce((n,x)=>n+x.profit,0));
  const dividends=roundMoney(payouts.reduce((n,x)=>n+x.amount,0));
- let openGain=0,matched=0,missing=0,tesouroMatched=0;
+ let openGain=0,matched=0,missing=0,tesouroMatched=0,incomePending=0;
  for(const h of port.holdings){
   // Direitos de subscrição sem valor de mercado não são posições compradas nem lucro em aberto.
   if(h.value===0&&/^[A-Z]{4}1[23]$/.test(codeOf(h.code)))continue;
-  if(h.fixedIncome){missing++;continue;} // Não supor juros/valor atualizado a partir de compras e resgates.
+  if(h.fixedIncome){incomePending++;continue;} // Principal conhecido; juros desconhecidos não são falta de custo.
   if(h.origin!=='position'&&h.origin!=='quote'){missing++;continue;}
   if(h.group==='Tesouro'){
    // B3 position report contains Valor Aplicado for Tesouro Direto.
@@ -313,7 +313,7 @@ function gains(state,owner='family',period='all',today=isoNow()){
  const profit=roundMoney(realized+dividends+openIncluded);
  const unmatched=[...led.problems,...bonds.problems].filter(p=>p.date<=today);
  const missingWindow=period!=='all';
- const complete=port.holdings.length>0&&missing===0&&unmatched.length===0&&excludedSales.length===0&&period==='all';
+ const complete=port.holdings.length>0&&missing===0&&incomePending===0&&unmatched.length===0&&excludedSales.length===0&&period==='all';
  const monthly=new Map();
  const add=(date,key,amount)=>{
   if(!Number.isFinite(amount))return;
@@ -330,7 +330,7 @@ function gains(state,owner='family',period='all',today=isoNow()){
  if(!warning&&unmatched.length)warning='Há eventos societários ou compras anteriores a conferir; o resultado acumulado pode estar incompleto.';
  return{
   owner,period,from,to:today,profit,realized,dividends,openGain:matched?openGain:null,
-  openIncluded,openAvailable,matched,missing,tesouroMatched,complete,partial:!complete,
+  openIncluded,openAvailable,matched,missing,incomePending,tesouroMatched,complete,partial:!complete,
   sales:recognizedSales.length,totalSales:sales.length,excludedSales:excludedSales.length,
   excludedGross:excludedSales.reduce((n,x)=>n+x.gross,0),
   payments:payouts.length,positions:port.holdings.length,
