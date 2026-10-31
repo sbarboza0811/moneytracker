@@ -10,6 +10,15 @@ const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>'
 const round=v=>Math.round((Number(v)||0)*100)/100;
 const mobileChart=()=>!!root.matchMedia?.('(max-width:790px)').matches;
 const chartMinWidth=()=>Math.max(255,Math.min(640,(Number(root.innerWidth)||390)-66));
+const currentTheme=()=>document.documentElement.dataset.theme==='light'?'light':'dark';
+function setTheme(mode){
+ const next=mode==='light'?'light':'dark';
+ document.documentElement.dataset.theme=next;
+ const meta=document.querySelector('meta[name="theme-color"]');
+ if(meta)meta.setAttribute('content',next==='dark'?'#0a1120':'#f3f6fc');
+ try{root.localStorage.setItem('moneytracker-theme-v1',next);}catch(_){}
+ render();
+}
 const el=id=>document.getElementById(id);
 const me=o=>String(S.displayNames?.[o]||({me:'Samuel',spouse:'Jessica',family:'Todos'}[o])||o);
 const today=()=>E.isoNow();
@@ -383,6 +392,7 @@ function pageQuotes(){
 }
 function pageMore(){
  return box(header('Configurações e conta','Nomes editáveis, sincronização e segurança')+
+ '<div class="m8-theme-settings"><div><b>Aparência</b><small>'+(currentTheme()==='dark'?'Tema escuro ativado':'Tema claro ativado')+'</small></div><button type="button" class="m8-btn sub" data-action="theme-toggle">'+(currentTheme()==='dark'?'☀ Usar tema claro':'☾ Usar tema escuro')+'</button></div>'+
  '<div class="m8-grid m8-two"><div><h3>Identificação dos titulares</h3>'+
  [['me','Carteira individual'],['spouse','Outra carteira'],['family','Visão conjunta']].map(([o,l])=>'<label class="m8-field">'+l+'<input id="m8-name-'+o+'" class="m8-input" maxlength="32" value="'+escape(me(o))+'"></label>').join('')+
  '<button class="m8-btn primary" data-action="save-names">Salvar nomes</button></div>'+
@@ -394,6 +404,8 @@ function pageMore(){
 function layout(content){
  const titles={home:'Visão geral',portfolio:'Carteira e alocação',result:'Resultados e rentabilidade',compare:'Comparações integradas',flow:'Origem do patrimônio',needs:'Diagnóstico financeiro',asset:'Detalhe do ativo',sale:'Detalhe da venda',income:'Proventos',history:'Histórico',import:'Importação B3',more:'Configurações',quotes:'Cotações'};
  const nav= id=>U.page===id?' active':'';
+ const dark=currentTheme()==='dark';
+ const themeButton='<button type="button" class="m8-iconbtn m8-theme-toggle" data-action="theme-toggle" title="'+(dark?'Usar tema claro':'Usar tema escuro')+'" aria-label="'+(dark?'Usar tema claro':'Usar tema escuro')+'" aria-pressed="'+dark+'">'+(dark?'☀':'☾')+'</button>';
  const ownerButtons=[['me',me('me')],['spouse',me('spouse')],['family',me('family')]].map(([o,n])=>'<button data-owner="'+o+'" class="'+(U.owner===o?'active':'')+'" aria-pressed="'+(U.owner===o)+'">'+escape(n)+'</button>').join('');
  const filters='<div class="m8-toolbar"><div class="m8-toggle">'+ownerButtons+'</div><div class="m8-divider"></div><div class="m8-pills">'+[['30','30d'],['90','90d'],['1y','1 ano'],['5y','5 anos'],['all','Tudo'],['custom','Datas']].map(([v,label])=>'<button data-period="'+v+'" class="'+(U.period===v?'sel':'')+'">'+label+'</button>').join('')+'</div>'+
  '<select class="m8-input m8-class-select" data-select="class"><option value="all">Todas as classes</option>'+['Ações','FIIs','ETFs','Tesouro','Renda fixa','Fundos','Outros'].map(c=>'<option value="'+c+'" '+(U.classe===c?'selected':'')+'>'+c+'</option>').join('')+'</select>'+
@@ -403,7 +415,7 @@ function layout(content){
  '<div class="m8-side-label">EXPLORAR</div><nav>'+NAV.map(([id,ico,label])=>'<button data-nav="'+id+'" class="'+nav(id)+'"><span>'+ico+'</span>'+label+'</button>').join('')+'</nav>'+
  '<div class="m8-side-label">FERRAMENTAS</div><nav>'+[['income','↓','Proventos'],['history','≡','Histórico'],['import','⇧','Importar B3'],['quotes','◉','Cotações'],['more','⚙','Configurações']].map(([id,ico,l])=>'<button data-nav="'+id+'" class="'+nav(id)+'"><span>'+ico+'</span>'+l+'</button>').join('')+'</nav>'+
  '<div class="m8-side-foot">MoneyTracker 2.0<small>Dados privados · Supabase</small></div></aside>'+
- '<div class="m8-main"><header class="m8-top"><div><span class="m8-eyebrow">MONEYTRACKER / '+escape(me(U.owner))+'</span><h1>'+escape(titles[U.page]||'Visão geral')+'</h1></div><div class="m8-topright"><button class="m8-btn sub" data-nav="import">⇧ Importar</button><button class="m8-iconbtn" data-nav="more" aria-label="Configurações">⚙</button></div></header>'+
+ '<div class="m8-main"><header class="m8-top"><div><span class="m8-eyebrow">MONEYTRACKER / '+escape(me(U.owner))+'</span><h1>'+escape(titles[U.page]||'Visão geral')+'</h1></div><div class="m8-topright">'+themeButton+'<button class="m8-btn sub" data-nav="import">⇧ Importar</button><button class="m8-iconbtn" data-nav="more" aria-label="Configurações">⚙</button></div></header>'+
  filters+'<main class="m8-content">'+content+'</main></div>'+
  '<nav class="m8-bottom">'+[['home','⌂','Início'],['portfolio','▦','Carteira'],['result','↗','Resultados'],['compare','⇄','Comparar'],['more','☰','Mais']].map(([id,ico,l])=>'<button class="'+nav(id)+'" data-nav="'+id+'"><b>'+ico+'</b><span>'+l+'</span></button>').join('')+'</nav></div>';
 }
@@ -466,6 +478,7 @@ function listen(){
   if(b.dataset.month){const val=b.dataset.month;if(val.length===4){U.from=val+'-01-01';U.to=val+'-12-31';}else{U.from=val+'-01';const d=new Date(Number(val.slice(0,4)),Number(val.slice(5,7)),0);U.to=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}U.period='custom';U.showCustom=true;return navigate('result');}
   if(b.dataset.quote)return quote(b.dataset.quote);
   const a=b.dataset.action;if(!a)return;
+  if(a==='theme-toggle')return setTheme(currentTheme()==='dark'?'light':'dark');
   if(a==='more'){U.limit+=70;return render();}
   if(a==='filter-more'){U.showCustom=!U.showCustom;return render();}
   if(a==='clear-filters'){U.from='';U.to='';U.period='1y';U.showCustom=false;return render();}
