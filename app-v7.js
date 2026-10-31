@@ -165,10 +165,12 @@ function reconciliationCard(pendenciesOnly=false){
  const a=E.reconciliationReport(S,ui.owner,pendenciesOnly?'all':ui.period);
  const rows=a.items.filter(x=>!x.matched||x.status!=='CALCULAVEL_BRUTO');
  const complete=a.verified;
+ const auctionCount=a.items.filter(x=>x.event==='Leilão de fração de bonificação'&&x.matched).length;
+ const normalCount=complete-auctionCount;
  let html=titlebar('Jessica · conciliação de investimentos')+
- '<p>Os custos reconstruídos só são usados quando o registro importado da B3 corresponde à data, quantidade e valor da venda.</p>'+
+ '<p>Os custos reconstruídos só são usados quando o registro importado da B3 corresponde à data, quantidade e valor da venda, inclusive nos leilões de fração de bonificações.</p>'+
  '<div class="mt7-cards3" style="margin-top:15px">'+
- stat('Conferidos',String(complete),'Resultados brutos')+
+ stat('Conferidos',String(complete),normalCount+' grupos de vendas + '+auctionCount+' leilões de fração')+
  stat('Provisórios',String(a.provisional),'Excluídos do lucro')+
  stat('Incompletos',String(a.incomplete+a.unmatched),'Excluídos do lucro')+
  '</div>';
@@ -180,7 +182,9 @@ function reconciliationCard(pendenciesOnly=false){
  ' · Venda '+money(x.gross)+'</p><div class="action"><b>O que falta</b><p>'+
  esc(x.note||'Revisar custo e eventos societários')+'</p></div></article>').join('')+'</div>';
  if(!pendenciesOnly){
-  html+='<button class="mt7-btn secondary" data-nav="needs">Ver operações pendentes</button>';
+  html+=a.provisional+a.incomplete+a.unmatched?
+   '<button class="mt7-btn secondary" data-nav="needs">Ver operações pendentes</button>':
+   '<p><b>Todas as vendas históricas auditadas foram conciliadas.</b> Isso não comprova a valorização atual de posições sem extrato de 2026.</p>';
  }
  let out=card(html);
  const historical=S.spouseHistoricalPosition;
