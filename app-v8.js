@@ -266,19 +266,54 @@ function fixedPanel(d){
  list.slice(0,10).map(x=>'<div class="m8-tx"><div><b>'+escape(x.product)+'</b><small>'+escape(me(x.owner))+' · '+E.dateBR(x.date)+' · '+(x.operation==='sell'?'Resgate':'Aplicação')+'</small></div><strong class="'+(x.operation==='sell'?'negative':'positive')+'">'+(x.operation==='sell'?'-':'+')+money(x.amount)+'</strong></div>').join('');
 }
 function pageResult(){
- const d=rows(),m=getMonths(d),g=new Map();
- for(const s of d.sales){const k=group(s.code,s.group);if(!g.has(k))g.set(k,{name:k,gross:0,cost:0,profit:0,count:0,unverified:0});const x=g.get(k);x.gross+=Number(s.gross)||0;x.count++;if(s.recognized&&Number.isFinite(+s.profit)){x.profit+=Number(s.profit);x.cost+=Number(s.gross)-Number(s.profit)}else x.unverified++;}
+ const d=rows(),m=getMonths(d),view=U.resultView||'overview',g=new Map(),perAsset=new Map();
+ for(const s of d.sales){
+  const cls=group(s.code,s.group);
+  if(!g.has(cls))g.set(cls,{name:cls,profit:0,gross:0,cost:0,count:0,unknown:0});
+  const v=g.get(cls);v.count++;v.gross+=Number(s.gross)||0;
+  if(s.recognized&&Number.isFinite(+s.profit)){v.profit+=Number(s.profit);v.cost+=Number(s.gross)-Number(s.profit);}
+  else v.unknown++;
+  const key=s.owner+'|'+s.code,asset=perAsset.get(key)||{key,code:s.code,owner:s.owner,profit:0,count:0,unknown:0};
+  asset.count++;if(s.recognized)asset.profit+=Number(s.profit)||0;else asset.unknown++;
+  perAsset.set(key,asset);
+ }
  const groups=[...g.values()].sort((a,b)=>Math.abs(b.profit)-Math.abs(a.profit));
- return kpi(d)+box(header('Lucro/prejuízo mensal e anual','Clique em uma barra para detalhar o período')+
- '<div class="m8-pills"><button data-grain="month" class="'+(U.grain==='month'?'sel':'')+'">Mensal</button><button data-grain="year" class="'+(U.grain==='year'?'sel':'')+'">Anual</button></div>'+
- barChart(m,U.grain)+'<p class="m8-hint">Vendas sem custo comprovado são excluídas do lucro. Ganhos não realizados não são somados aos períodos.</p>')+
- '<div class="m8-grid m8-two">'+box(header('Resultado por classe','Vendas realizadas no intervalo')+
- (groups.length?groups.map(x=>'<button class="m8-class-result" data-class="'+escape(x.name)+'"><span><b>'+escape(x.name)+'</b><small>'+x.count+' vendas · vendido '+money(x.gross)+(x.unverified?' · '+x.unverified+' sem custo':'')+'</small></span><strong class="'+(x.profit<0?'negative':'positive')+'">'+money(x.profit)+'</strong> <span>›</span></button>').join(''):empty('Sem vendas neste período.')))+
- box(header('Últimas vendas','Abra uma operação para conferir o custo')+
- (d.sales.length?d.sales.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,12).map(s=>saleRow(s)).join(''):empty('Sem vendas neste intervalo.')))+
- '</div>'+box(header('Proventos','Rendimentos, dividendos e juros comprovados',action('Detalhar proventos','income',true))+
- '<div class="m8-kpis m8-small-kpis">'+iconStat('Recebimentos',money(d.dividends),d.payouts.length+' pagamentos','violet','income')+iconStat('Resultado combinado',money(d.realized+d.dividends),'Bruto · exclui ganhos em aberto','teal','result')+'</div>');
+ const sales=d.sales.slice().sort((x,y)=>y.date.localeCompare(x.date)),payouts=d.payouts.slice().sort((x,y)=>y.date.localeCompare(x.date));
+ const valid=sales.filter(s=>s.recognized&&Number.isFinite(+s.profit)),
+ gross=round(valid.reduce((n,s)=>n+Number(s.gross||0),0)),
+ costs=round(gross-d.realized),
+ gainReturn=costs>0?100*d.realized/costs:null;
+ const nav='<div class="m8-result-nav">'+[['overview','Visão geral'],['sales','Vendas detalhadas'],['income','Proventos']].map(([id,label])=>'<button data-result-view="'+id+'" class="'+(view===id?'active':'')+'">'+label+'</button>').join('')+'</div>';
+ const summary='<div class="m8-result-summary">'+
+ '<div><small>Resultado realizado</small><strong class="'+(d.realized+d.dividends<0?'negative':'positive')+'">'+money(d.realized+d.dividends)+'</strong><span>Vendas conciliadas + proventos</span></div>'+
+ '<div><small>Lucro/prejuízo em vendas</small><strong class="'+(d.realized<0?'negative':'positive')+'">'+money(d.realized)+'</strong><span>'+valid.length+' operações com custo</span></div>'+
+ '<div><small>Proventos recebidos</small><strong>'+money(d.dividends)+'</strong><span>'+payouts.length+' pagamentos</span></div>'+
+ '<div><small>Rentabilidade das vendas*</small><strong>'+(gainReturn===null?'—':gainReturn.toFixed(2).replace('.',',')+'%')+'</strong><span>Lucro / custo das vendas</span></div></div>';
+ const notice=d.excluded?'<div class="m8-notice">'+d.excluded+' venda(s) sem custo comprovado não entram no lucro exibido. Consulte Diagnóstico para conferir.</div>':'';
+ const chart=m.some(x=>Math.abs(x.sales)+Math.abs(x.dividends)>.000001)?
+  box(header('Evolução do resultado','Vendas e proventos '+(U.grain==='year'?'anuais':'mensais')+' · clique numa barra para filtrar')+
+   '<div class="m8-pills"><button data-grain="month" class="'+(U.grain==='month'?'sel':'')+'">Mensal</button><button data-grain="year" class="'+(U.grain==='year'?'sel':'')+'">Anual</button></div>'+barChart(m,U.grain),'m8-results-graph'):'';
+ const classPanel=groups.length?box(header('Lucro/prejuízo por classe','Selecione uma classe para filtrar os resultados')+
+  groups.map(x=>'<button class="m8-class-result" data-class="'+escape(x.name)+'"><span><b>'+escape(x.name)+'</b><small>'+x.count+' vendas · R$ vendidos '+money(x.gross)+(x.unknown?' · '+x.unknown+' sem custo':'')+'</small></span><strong class="'+(x.profit<0?'negative':'positive')+'">'+money(x.profit)+'</strong><span>›</span></button>').join('')):'';
+ const assetGroups=[...perAsset.values()].sort((x,y)=>Math.abs(y.profit)-Math.abs(x.profit));
+ const assetPanel=assetGroups.length?box(header('Ativos que geraram resultado','Ranking das vendas do período')+
+  assetGroups.slice(0,10).map(x=>'<div class="m8-tx"><div><b>'+escape(x.code)+'</b><small>'+escape(me(x.owner))+' · '+x.count+' vendas'+(x.unknown?' · '+x.unknown+' a conciliar':'')+'</small></div><strong class="'+(x.profit<0?'negative':'positive')+'">'+money(x.profit)+'</strong></div>').join('')):'';
+ const salePanel=sales.length?box(header('Operações de venda','Clique para visualizar custo médio e compras anteriores')+
+  sales.slice(0,view==='sales'?U.limit:8).map(saleRow).join('')+
+  (view==='sales'&&sales.length>U.limit?'<button class="m8-btn sub" data-action="more">Carregar mais vendas</button>':'')+
+  (view==='overview'&&sales.length>8?action('Ver todas as vendas','result',true):'')):'';
+ const incomePanel=payouts.length?box(header('Proventos recebidos','Pagamentos identificados no intervalo')+
+  payouts.slice(0,view==='income'?U.limit:8).map(p=>'<div class="m8-tx"><div><b>'+escape(p.code)+'</b><small>'+escape(me(p.owner))+' · '+E.dateBR(p.date)+' · '+escape(p.type)+'</small></div><strong>'+money(p.amount)+'</strong></div>').join('')+
+  (view==='income'&&payouts.length>U.limit?'<button class="m8-btn sub" data-action="more">Carregar mais</button>':'')+
+  (view==='overview'&&payouts.length>8?action('Ver proventos','income',true):'')):'';
+ if(view==='sales')return nav+summary+notice+(sales.length?'<div class="m8-grid m8-two">'+salePanel+classPanel+'</div>':box('<p>Não houve vendas no período selecionado.</p>'));
+ if(view==='income')return nav+summary+(incomePanel||box('<p>Não foram encontrados proventos neste período.</p>'))+chart;
+ return nav+summary+notice+chart+
+ (classPanel||assetPanel?'<div class="m8-grid m8-two">'+classPanel+assetPanel+'</div>':'')+
+ (salePanel||incomePanel?'<div class="m8-grid m8-two">'+salePanel+incomePanel+'</div>':'')+
+ '<p class="m8-hint">*Rentabilidade sobre o custo das vendas identificadas, não retorno percentual da carteira inteira. Valorização em aberto não está incluída.</p>';
 }
+
 function saleRow(s){
  return '<button class="m8-tx click" data-sale="'+escape(s.owner+'|'+s.code+'|'+s.date+'|'+s.qty+'|'+s.gross)+'"><span><b>'+escape(s.code)+' <small>· '+escape(me(s.owner))+'</small></b><small>'+E.dateBR(s.date)+' · vendido '+money(s.gross)+' · custo '+(s.recognized?money(s.cost):'não comprovado')+'</small></span><strong class="'+(s.recognized?(s.profit<0?'negative':'positive'):'muted')+'">'+(s.recognized?money(s.profit):'Não apurado')+'</strong></button>';
 }
@@ -481,6 +516,7 @@ function listen(){
   if(b.dataset.owner){U.owner=b.dataset.owner;derivedCache=null;analysis=null;U.classe='all';return render();}
   if(b.dataset.period){U.period=b.dataset.period;U.showCustom=b.dataset.period==='custom';return render();}
   if(b.dataset.grain){U.grain=b.dataset.grain;return render();}
+  if(b.dataset.resultView){U.resultView=b.dataset.resultView;U.limit=70;return render();}
   if(b.dataset.compare){U.compare=b.dataset.compare;return render();}
   if(b.dataset.class){U.classe=b.dataset.class;return navigate(U.page==='result'?'result':'portfolio');}
   if(b.dataset.asset){U.assetKey=b.dataset.asset;return navigate('asset');}
