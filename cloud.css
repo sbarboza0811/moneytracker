@@ -16,3 +16,6 @@
 .toast{bottom:165px!important;right:12px!important;left:12px!important;margin-left:auto;max-width:min(420px,calc(100vw - 24px));z-index:7000}
 #mt-install-feedback{top:14px!important;bottom:auto!important;left:12px!important;right:12px!important;z-index:7500!important}
 @media(min-width:800px){.mt-cloud-bar{bottom:12px;right:12px}.toast{bottom:82px!important;left:auto!important;right:12px!important}}
+
+/* Login screen is shown only if restoring the saved session fails or no session exists. */
+#mt-auth-form:not(.mt-auth-ready){display:none!important}
