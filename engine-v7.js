@@ -199,13 +199,8 @@ function gaps(state,owner='family',today=isoNow()){
     why:'A última posição registrada é de '+dateBR(snapshot.date)+'.',
     action:'Baixe e importe uma nova Posição B3.',code:'old-position'});
   }
-  const ops=state.records.filter(r=>ownerOf(r.owner)===o);
-  const years=[...new Set(ops.map(r=>recordDate(r).slice(0,4)).filter(Boolean))].sort();
-  if(years.length>1){for(let yr=+years[0]+1;yr<+years[years.length-1];yr++)if(!years.includes(String(yr))){
-    items.push({level:'warning',owner:o,title:'Verificar extratos da B3 de '+yr+' ('+name+')',
-     why:'Não há registros importados desse ano. Pode ter sido um ano sem operações, mas é importante conferir.',
-     action:'Na Área do Investidor, confira Negociação e Movimentação de '+yr+'; importe os Excel se existirem.',code:'missing-year-'+yr});
-  }}
+  // Ausência de operações em um ano é válida e não indica arquivo faltante.
+  // Exigir histórico adicional apenas por lacunas comprovadas (como vendas sem compras).
   const problems=led.problems.filter(x=>x.owner===o);
   if(problems.length)items.push({level:'critical',owner:o,title:'Vendas sem compras anteriores ('+name+')',
     why:problems.length+' operação(ões) com histórico insuficiente; podem existir transferências ou eventos societários.',
