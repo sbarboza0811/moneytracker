@@ -341,7 +341,7 @@ function v4Charts(){
  '<div class="v4chartpanel"><h3>Lucro nas vendas</h3>'+v4MonthlyBars('Ganho realizado',realized,year,'gain')+'</div></div>'+ '<div class="v4cumulative"><h3>Resultado realizado acumulado</h3>'+v4CumulativeChart()+'</div></section>';
 }
 function v4ProfitPanel(D){
- const profit=v3profit(D),real=v3realized(),unreal=v3unrealized(D),divs=D.incTotal;
+ const real=v3realized(),unreal=v3unrealized(D),divs=D.incTotal,profit=real.realized+divs+(unreal.matched?unreal.unrealized:0);
  return '<section class="v2panel"><div class="v2section"><h2>Lucro e rendimentos</h2><button data-page="performance">Ver detalhes ›</button></div>'+
  '<button type="button" class="v4profitbanner" data-page="performance"><span><small>Resultado desde o ponto de partida</small><strong>'+(profit?money(profit.profit):'Lucro identificado no histórico')+'</strong><small>'+(profit?'Patrimônio e caixa menos capital próprio':'Informe capital inicial e aportes para calcular o resultado real')+'</small></span><b>›</b></button>'+
  '<div class="v4profitgrid"><button data-page="performance" class="v4profitstat"><small>Lucro nas vendas</small><strong>'+money(real.realized)+'</strong><em>Estimado pelo histórico</em></button>'+
