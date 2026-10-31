@@ -88,3 +88,42 @@ body .toast{right:15px!important;left:15px!important;bottom:90px!important;max-w
 .v3barheight{flex:1;width:100%;display:flex;align-items:flex-end;border-radius:6px 6px 0 0;background:#f0f7f2}
 .v3barheight>div{background:linear-gradient(#14ab7d,#127d5d);width:100%;border-radius:6px 6px 0 0;min-height:0}
 @media(max-width:440px){.v3barplot{gap:3px}.v3barcol small{font-size:9px}}
+
+/* v4: profit first, actionable charts and direct B3 file import */
+.v4profitbanner{display:flex;width:100%;border:1px solid #cde9da;background:linear-gradient(100deg,#e7f7ef,#f4fcf7);border-radius:17px;padding:19px 20px;align-items:center;justify-content:space-between;text-align:left;color:#144f39;gap:12px;margin-bottom:13px;cursor:pointer}
+.v4profitbanner span{display:flex;flex-direction:column;gap:5px;min-width:0}
+.v4profitbanner small{font-size:11px;line-height:1.45;color:#477563;font-weight:550}
+.v4profitbanner strong{font-size:clamp(20px,3vw,28px);line-height:1.2;letter-spacing:-.8px;overflow-wrap:anywhere}
+.v4profitbanner b{font-size:28px;line-height:1}
+.v4profitgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.v4profitstat{border:1px solid #e2ece6;background:#fff;border-radius:14px;padding:16px 13px;text-align:left;display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0;cursor:pointer;color:#183a2b}
+.v4profitstat small{color:#6f8478;font-size:11px;font-weight:620}
+.v4profitstat strong{font-size:clamp(14px,2vw,20px);font-weight:800;overflow-wrap:anywhere}
+.v4profitstat em{font-style:normal;color:#81968b;font-size:10px;line-height:1.35}
+.v4profitstat:hover,.v4profitbanner:hover{outline:1px solid #a7d8c0}
+.v4years{display:flex;gap:7px;overflow-x:auto;padding:2px 0 15px;scrollbar-width:thin}
+.v4years button{border:1px solid #dfece3;color:#496f5e;background:#f8fbf8;border-radius:99px;padding:8px 12px;white-space:nowrap;font-size:11px;font-weight:750}
+.v4years button.selected{background:#0f8260;color:#fff;border-color:#0f8260}
+.v4chartgrid{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+.v4chartpanel{border:1px solid #e8f0e8;border-radius:16px;padding:15px;min-width:0}
+.v4chartpanel h3{font-size:13px;font-weight:800;margin:0 0 9px;color:#20483b}
+.v4chartvalue{font-size:19px;font-weight:800;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+.v4chartcaption{font-size:10px;color:#85968a;line-height:1.45;margin-top:5px}
+.v4chart{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:5px;height:155px;align-items:end;margin-top:15px}
+.v4chartcol{height:100%;display:flex;flex-direction:column;align-items:center;gap:7px;min-width:0}
+.v4chartcol small{color:#83968c;font-size:9px}
+.v4charttrack{height:100%;width:100%;background:#f1f7f2;border-radius:5px 5px 0 0;display:flex;align-items:flex-end;overflow:hidden}
+.v4bargain,.v4barloss{width:100%;border-radius:5px 5px 0 0;min-height:0}
+.v4bargain{background:linear-gradient(#26b98a,#117f5c)}.v4barloss{background:linear-gradient(#e7776d,#c94f50)}
+.v4empty{padding:25px 8px;color:#7c8f84;background:#f5f9f6;border-radius:10px;font-size:12px;line-height:1.5}
+.v4importlabel{font-size:13px;font-weight:760;margin:4px 0 11px;color:#214e3d}
+.v4ownerselect{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:24px}
+.v4ownerselect button{padding:16px 9px;min-height:51px;border-radius:13px;border:1px solid #d4e6d9;background:#f6faf7;color:#3d6551;font-weight:760;font-size:13px;cursor:pointer}
+.v4ownerselect button.selected{border:2px solid #118366;background:#e5f6ed;color:#086345}
+.v4nativefile{border:1px solid #d5e7dc;border-radius:16px;background:#f6fbf8;padding:19px}
+.v4nativefile label{display:block;font-size:14px;font-weight:800;color:#204b37;margin-bottom:14px}
+.v4nativefile input[type=file]{display:block;position:static!important;width:100%;max-width:100%;padding:15px 10px;background:#fff;color:#1e4e3a;border:1px solid #b5d4c4;border-radius:12px;font-size:13px;cursor:pointer;line-height:1.45}
+.v4nativefile input[type=file]::file-selector-button{border:0;padding:10px 12px;background:#167d5d;border-radius:9px;color:#fff;font-weight:750;margin-right:12px;cursor:pointer}
+.v4nativefile p{font-size:11px;line-height:1.5;color:#718b7d;margin:14px 0 0}
+@media(max-width:800px){.v4chartgrid{grid-template-columns:1fr}.v4profitgrid{gap:7px}.v4profitstat{padding:13px 9px}.v4profitstat strong{font-size:15px}}
+@media(max-width:370px){.v4profitgrid{grid-template-columns:1fr 1fr}.v4profitstat:last-child{grid-column:1/-1}.v4ownerselect button{font-size:12px;padding:12px 5px}}
