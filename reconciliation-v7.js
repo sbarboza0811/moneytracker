@@ -81,102 +81,31 @@ E.reconciliationReport=function(state,owner='family',period='all',today=E.isoNow
    de vendas da B3 como se todas ainda estivessem sem custo. */
 const originalGaps=E.gaps;
 E.gaps=function(state,owner='family',today=E.isoNow()){
- const base=originalGaps(state,owner,today);
- // O relatório consolidado de 2024 já foi recebido: é referência histórica,
- // não uma cotação para 2026. O aviso nunca deve solicitar o mesmo arquivo.
- const historical=state&&state.spouseHistoricalPosition;
- const revised=base.map(issue=>{
-  if(issue.owner==='spouse'&&issue.code==='cost-reconcile'){
-   const led=E.ledger(state,'spouse'),port=E.portfolio(state,'spouse');
-   const pend=port.holdings.filter(h=>{
-    if(h.value===0&&/^[A-Z]{4}1[23]$/.test(E.codeOf(h.code)))return false;
-    if(h.code==='BTHF11'&&state?.reconciliation?.positionBasis?.BTHF11?.owner==='spouse'&&Number(state.reconciliation.positionBasis.BTHF11.qty)===h.qty)return false;
-    if(h.group==='Tesouro')return !(h.applied>0);
-    const b=led.stocks.get('spouse|'+E.codeOf(h.code));
-    return !(b&&!b.uncertain&&b.qty>0&&Math.abs(b.qty-h.qty)<=Math.max(.00001,.002*h.qty));
-   }).map(h=>{
-    const b=led.stocks.get('spouse|'+E.codeOf(h.code));
-    const gap=Math.round((h.qty-(b?.qty||0))*100000)/100000;
-    if(h.code==='BTHF11'&&state?.reconciliation?.conversionEvidence?.BCFF11_BTHF11)
-     return 'BTHF11: '+gap+' cotas recebidas na conversão de BCFF11 em 18/12/2024; quantidade explicada, custo fiscal da conversão pendente';
-    return h.code+': posição '+h.qty+', histórico '+Math.round((b?.qty||0)*100000)/100000+
-     (gap?' (diferença '+gap+')':'')+'. Custo de origem ainda não demonstrado';
-   });
-   if(!pend.length)return null;
-   return {...issue,level:'warning',code:'open-cost-unverified',
-    title:'Jessica: '+pend.length+' posições com custo de origem pendente',
-    why:pend.join(' | '),
-    action:'Não usar cotação da posição de 2024 como custo fiscal. Necessário custo de aquisição das unidades históricas, quando comprovável por IRPF ou informe de corretora.'};
-  }
-  if(issue.owner==='me'&&issue.code==='cost-reconcile'){
-   const led=E.ledger(state,'me'),port=E.portfolio(state,'me');
-   const costFixed=new Set(extraOpenBasis(state,'me').map(x=>x.code));
-   const entries=port.holdings.filter(h=>{
-    if(h.value===0&&/^[A-Z]{4}1[23]$/.test(E.codeOf(h.code)))return false;
-    if(costFixed.has(h.code))return false;
-    if(h.group==='Tesouro')return !(h.applied>0);
-    if(h.origin!=='position'&&h.origin!=='quote')return true;
-    const rec=led.stocks.get('me|'+E.codeOf(h.code));
-    return !(rec&&!rec.uncertain&&rec.qty>0&&Math.abs(rec.qty-h.qty)<=Math.max(.00001,.002*h.qty));
-   });
-   const recent=entries.filter(h=>['BOVA11','BEST11'].includes(h.code)).map(h=>{
-    const raw=state.records.filter(r=>r.t==='trade'&&r.owner==='me'&&
-      r.v[1]==='Compra'&&E.codeOf(r.v[5])===h.code&&r.v[0]==='28/10/2026');
-    const bought=raw.reduce((sum,r)=>sum+Number(r.v[6]||0),0);
-    const ledQty=led.stocks.get('me|'+E.codeOf(h.code))?.qty||0;
-    return{code:h.code,bought,position:h.qty,ledger:ledQty,exact:Math.abs(ledQty-h.qty-bought)<.000001};
-   });
-   const explained=recent.filter(x=>x.exact&&x.bought>0);
-   const irim=entries.find(x=>x.code==='IRIM11');
-   const unresolved=entries.filter(x=>!explained.some(y=>y.code===x.code));
-   const words=explained.map(x=>x.code+': posição '+x.position+' e compra de '+x.bought+
-      ' unidades em 28/10/2026, já registrada no histórico');
-   if(irim)words.push('IRIM11: origem confirmada na liquidação de IRDM11 (82 cotas geraram 72 IRIM11 e fração leiloada); custo fiscal da reorganização precisa ser tratado separadamente');
-   if(!explained.length&&!unresolved.length)return null;
-   return {...issue,level:'warning',code:'reconcile-position-timing',
-    title:explained.length+' diferenças entre compras recentes e posição importada'+
-      (unresolved.length?', mais '+unresolved.length+' custo(s) pendente(s)':''),
-    why:'As notas de compra já estão no histórico, mas não constam da posição B3 importada. '+words.join('. ')+'. Não é possível assegurar que seja somente atraso de liquidação.',
-    action:'Não reenvie as notas de BOVA11 ou BEST11. Confirme apenas a posição atual que reflita essas aquisições; se elas já estiverem lá, a divergência deve ser tratada como erro de importação.'};
-  }
-  if(issue.owner!=='spouse'||issue.code!=='missing-position'||!historical?.rows?.length)return issue;
-  return {...issue,level:'warning',code:'historical-spouse-position',
-   title:'Jessica: 16 ativos reconstruídos; valor de mercado de 2026 não confirmado',
-   why:'O relatório de 2024 já foi recebido. '+(state.reconciliation?.spouseDerivedHoldings?.assetsCount||0)+' ativos tiveram suas quantidades reconstruídas até setembro/2026 usando 35 negócios e desdobramento do ALZR11. Isso não substitui posição oficial de 2026 ou preços atuais.',
-   action:'Nada a reenviar de 2024. Para valor de mercado atual, é necessária uma posição de 2026 se ela não estiver disponível nas fontes conectadas.'};
- }).filter(Boolean);
- if(!getEntries(state).length)return revised.filter(x=>x.code!=='cash-flow-coverage');
- const auditable=new Set(getEntries(state).map(x=>x.owner));
- const selected=ownerSet(owner);
- const items=revised.filter(x=>x.code!=='cash-flow-coverage'&&
-   !(x.code==='unverified-sales'&&selected.includes(x.owner)&&auditable.has(x.owner)));
- if(selected.includes('me')&&state?.reconciliation?.positionMismatch?.ITSA4&&
-    !E.portfolio(state,'me').holdings.some(h=>E.codeOf(h.code)==='ITSA4'&&Number(h.qty)>0)){
-  const p=state.reconciliation.positionMismatch.ITSA4;
-  items.push({level:'warning',owner:'me',code:'historical-position-discrepancy',
-    title:'ITSA4: '+p.historic_qty+' ações reconstruídas não constam na posição atual',
-    why:p.reason||('A reconstrução documental indica '+p.historic_qty+' ações, ausentes da posição importada.'),
-    action:'Conferir especificamente o saldo de ITSA4 na B3/Inter, ou uma transferência/negociação posterior. Não são necessárias novamente as notas de compras anteriores.'});
- }
+ const selected=ownerSet(owner),issues=[],p=E.portfolio(state,owner);
  for(const o of selected){
-  if(!auditable.has(o))continue;
-  const report=audit(state,o,'all',today),g=E.gains(state,o,'all',today);
-  if(g.excludedSales<=0&&report.unmatched===0)continue;
-  const raw=[...E.ledger(state,o).sales,...E.treasuryLedger(state,o).sales];
-  const verified=new Set(report.checks.filter(x=>x.matched&&x.status==='CALCULAVEL_BRUTO')
-   .map(x=>x.owner+'|'+x.date+'|'+E.codeOf(x.code)));
-  const unresolved=raw.filter(x=>!x.recognized&&!verified.has(x.owner+'|'+x.date+'|'+x.code));
-  const codes=[...new Set(unresolved.map(x=>x.code))];
-  items.push({level:'critical',owner:o,code:'reconciliation-unverified',
-    title:g.excludedSales+' venda(s) sem custo comprovado ('+(o==='spouse'?'Jessica':'Samuel')+')',
-    why:report.verified+' grupo(s) já conciliados por documentos. Restam '+g.excludedSales+
-      ' registros em '+[...new Set(unresolved.map(x=>x.date+'|'+x.code))].length+
-      ' grupos, entre eles '+codes.slice(0,12).join(', ')+'.',
-    action:(state?.reconciliation?.pendingDetails||[]).filter(x=>unresolved.some(y=>y.code===x.code&&y.date===x.date))
-      .map(x=>x.code+': '+x.reason).join(' | ')||
-      'Confira somente a origem do custo das unidades ainda não conciliadas, pois as notas de venda já estão importadas.'});
+  const label=o==='spouse'?'Jessica':'Samuel';
+  const snapshot=o==='spouse'?state.spousePositionSnapshot:state.positionSnapshot;
+  if(!snapshot?.rows?.length)issues.push({level:'warning',owner:o,code:'missing-position',
+   title:'Posição B3 atual não importada — '+label,
+   why:'A avaliação disponível pode usar histórico ou estimativas, sem confirmar o valor de mercado atual.',
+   action:'Importe uma Posição B3 atualizada para obter valores de mercado.'});
+  else if(snapshot.date&&today.slice(0,7)!==snapshot.date.slice(0,7))
+   issues.push({level:'info',owner:o,code:'old-position',title:'Posição de '+label+' tem data anterior',
+    why:'Posição registrada em '+E.dateBR(snapshot.date)+'.',
+    action:'Atualize a Posição B3 quando quiser uma avaliação recente.'});
+  const g=E.gains(state,o,'all',today);
+  if(g.excludedSales>0||g.reconciliationUnmatched>0||g.reconciliationProvisional>0||g.reconciliationIncomplete>0){
+   issues.push({level:'critical',owner:o,code:'unverified-sales',
+    title:'Vendas ou conciliações a verificar — '+label,
+    why:g.excludedSales+' venda(s) sem lucro apurado; '+g.reconciliationUnmatched+' conciliação(ões) não correspondentes.',
+    action:'Confira as operações específicas no histórico e os custos de origem.'});
+  }
+  if(g.missing>0)issues.push({level:'warning',owner:o,code:'open-cost-unverified',
+   title:g.missing+' posição(ões) sem valorização completa — '+label,
+   why:'Existem posições cujo custo ou valor de mercado ainda não pode ser calculado com as fontes atuais.',
+   action:'Importe fontes de custo ou posição quando disponíveis; nenhuma cotação será tratada como custo fiscal.'});
  }
- return items;
+ return issues;
 };
 
 E.gains=function(state,owner='family',period='all',today=E.isoNow()){
@@ -220,9 +149,7 @@ E.gains=function(state,owner='family',period='all',today=E.isoNow()){
  const remainingProblems=(base.unmatched||[]).filter(p=>
   excluded.some(x=>x.owner===(p.owner||'me')&&x.date===p.date&&E.codeOf(x.code)===E.codeOf(p.code)));
  const parts=[];
- const custodyMismatch=ownerSet(owner).includes('me')&&Boolean(state?.reconciliation?.positionMismatch?.ITSA4)&&
-  !E.portfolio(state,'me').holdings.some(h=>E.codeOf(h.code)==='ITSA4'&&Number(h.qty)>0);
- if(custodyMismatch)parts.push('ITSA4: 99 ações reconstruídas estão ausentes da posição atual; lucro patrimonial completo não verificável.');
+ const custodyMismatch=false; // Nunca usar uma divergência estática arquivada como bloqueio de cálculo.
  if(excluded.length)parts.push(excluded.length+' negociações sem custo confirmado foram excluídas do lucro.');
  if(a.unmatched)parts.push(a.unmatched+' conciliações não coincidiram com as negociações importadas.');
  if(missing){
