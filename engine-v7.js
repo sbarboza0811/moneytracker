@@ -344,7 +344,7 @@ function gaps(state,owner='family',today=isoNow()){
   if(item&&item.source==='position'){
    const result=gains(state,o,'all',today);
    if(result.missing)items.push({level:'warning',owner:o,title:'Conciliar custo médio de '+name,
-    why:result.missing+' posição(ões) não coincidem com as quantidades calculadas pelas negociações.',
+    why:result.missing+' posição(ões) ainda não têm custo ou valorização integralmente comprovados. Isso não significa necessariamente divergência de quantidade.',
     action:'Confira extratos de corretoras e eventos societários (desdobramento, grupamento, subscrição, transferência).',code:'cost-reconcile'});
   }
  }
