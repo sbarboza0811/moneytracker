@@ -225,31 +225,23 @@ function reconciliationCard(pendenciesOnly=false){
 }
 
 function profitDetails(){
- if(!E.profitBreakdown)return card('<p>Detalhamento indisponível nesta versão.</p>');
- const d=E.profitBreakdown(S,ui.owner,ui.period);
+ if(!E.profitBreakdown)return card('<p>Detalhamento indisponível.</p>');
+ const d=E.profitBreakdown(S,ui.owner,ui.period),id=ui.detailId||'';
  const buyer=x=>x.owner==='spouse'?'Jessica':'Samuel';
- const fmtDate=x=>E.dateBR(x);
- const details=(label,rows)=>'<details class="mt7-card" style="padding:16px;margin-top:12px"><summary style="cursor:pointer;font-weight:700">'+esc(label)+'</summary>'+rows+'</details>';
- const line=(title,small,amount)=>'<div class="mt7-row"><span class="info"><b>'+esc(title)+'</b><small>'+esc(small)+'</small></span><span class="price"><strong>'+esc(amount)+'</strong></span></div>';
- const saleRows=d.assets.map(g=>{
-  const sales=g.sales.map(x=>line(fmtDate(x.date)+' · '+fmt(x.qty)+' un.',buyer(x.owner)+' · Venda '+money(x.gross)+' · Custo '+(x.cost===null?'não confirmado':money(x.cost))+' · '+x.source,
-    x.recognized?money(x.profit):'Não calculado')).join('');
-  const purchaseRows=g.purchases.length?g.purchases.map(x=>line(fmtDate(x.date)+' · Compra '+fmt(x.qty)+' un.',
-    buyer(x.owner)+' · '+(x.broker||'Corretora não informada'),money(x.total))).join(''):
-    '<p class="mt7-footnote">Nenhuma compra anterior encontrada nos arquivos. O custo conciliado pode ter origem em documento externo ou evento societário.</p>';
-  return details(g.code+' · '+buyer(g.owner)+' · '+g.sales.length+' venda(s) · Resultado '+money(g.profit),
-   '<p><b>Valor vendido:</b> '+money(g.gross)+' · <b>Custo atribuído:</b> '+money(g.cost)+' · <b>Lucro/prejuízo:</b> '+money(g.profit)+'</p>'+
-   '<h3>Vendas que compõem o resultado</h3>'+sales+
-   '<h3>Compras históricas relacionadas</h3><p class="mt7-footnote">Compras registradas até a última venda deste ativo. O cálculo usa custo médio e eventos societários, não seleção direta de lotes. A lista pode conter compras já consumidas em vendas anteriores.</p>'+purchaseRows);
- }).join('');
- const payouts=d.payouts.map(x=>line(fmtDate(x.date)+' · '+x.code,buyer(x.owner)+' · '+x.type,money(x.amount))).join('');
- return card(titlebar('De onde veio o resultado do período')+
-  '<p>Lucro das vendas: <b>'+money(d.realized)+'</b> · Proventos: <b>'+money(d.dividends)+'</b> · Total realizado: <b>'+money(d.realized+d.dividends)+'</b>.</p>'+
-  '<p>'+d.sales.length+' venda(s), '+d.payouts.length+' crédito(s) e '+d.excluded+' venda(s) não apurada(s). Tudo atualizado conforme o titular e o período selecionados.</p>')+
-  (saleRows||card('<p>Não houve vendas neste período.</p>'))+
-  details('Proventos recebidos · '+d.payouts.length+' lançamentos · '+money(d.dividends),
-    payouts||'<p>Não houve proventos neste período.</p>')+
-  card('<p class="mt7-footnote">Este detalhamento soma operações realizadas. Em “Todos”, o lucro total da tela pode incluir também valorização em aberto, apresentada separadamente acima. Valores brutos, antes de taxas e impostos não identificados.</p>');
+ const line=(title,subtitle,amount)=>'<div class="mt7-row"><span class="info"><b>'+esc(title)+'</b><small>'+esc(subtitle)+'</small></span><span class="price"><strong>'+esc(amount)+'</strong></span></div>';
+ let selected='';
+ if(id.startsWith('asset:')){
+  const key=id.slice(6),g=d.assets.find(x=>x.owner+'|'+x.code===key);
+  if(g){
+   const sales=g.sales.map(x=>line(E.dateBR(x.date)+' · Venda '+fmt(x.qty)+' un.','Valor vendido '+money(x.gross)+' · Custo '+(x.cost===null?'não comprovado':money(x.cost))+' · '+x.source,x.recognized?money(x.profit):'Não calculado')).join('');
+   const purchases=g.purchases.slice(0,80).map(x=>line(E.dateBR(x.date)+' · Compra '+fmt(x.qty)+' un.',buyer(x.owner)+' · '+x.broker,money(x.total))).join('');
+   selected=card(titlebar('Detalhes de '+g.code)+'<p>Vendido: <b>'+money(g.gross)+'</b> · Custo: <b>'+money(g.cost)+'</b> · Lucro: <b>'+money(g.profit)+'</b></p><h3>Vendas</h3>'+sales+'<h3>Compras anteriores</h3><p class="mt7-footnote">Compras formam o custo médio e não são lotes atribuídos diretamente à venda.</p>'+(purchases||'<p>Sem compras anteriores registradas.</p>')+(g.purchases.length>80?'<p>Mostrando 80 compras mais recentes de '+g.purchases.length+'.</p>':''));
+  }
+ }else if(id==='income'){
+  selected=card(titlebar('Proventos recebidos')+d.payouts.slice(0,120).map(x=>line(E.dateBR(x.date)+' · '+x.code,buyer(x.owner)+' · '+x.type,money(x.amount))).join('')+(d.payouts.length>120?'<p>Mostrando 120 pagamentos mais recentes de '+d.payouts.length+'. Selecione período menor para ver mais.</p>':''));
+ }
+ const assets=d.assets.map(g=>'<button type="button" data-detail="'+esc('asset:'+g.owner+'|'+g.code)+'" class="mt7-row" style="width:100%;text-align:left"><span class="info"><b>'+esc(g.code)+' · '+buyer(g.owner)+'</b><small>'+g.sales.length+' venda(s) · Recebido '+money(g.gross)+' · Custo '+money(g.cost)+'</small></span><span class="price"><strong>'+money(g.profit)+'</strong></span></button>').join('');
+ return card(titlebar('Operações que compõem o lucro')+'<p>Vendas: <b>'+money(d.realized)+'</b> · Proventos: <b>'+money(d.dividends)+'</b> · Total realizado: <b>'+money(d.realized+d.dividends)+'</b>.</p><p>'+d.sales.length+' vendas · '+d.payouts.length+' pagamentos · '+d.excluded+' vendas sem custo comprovado.</p><button type="button" class="mt7-btn secondary" data-detail="income">Ver proventos individualmente</button>')+selected+card(titlebar('Vendas por ativo')+(assets||'<p>Não houve vendas neste período.</p>'));
 }
 function profit(){
  const p=E.portfolio(S,ui.owner),g=E.gains(S,ui.owner,ui.period);
@@ -476,6 +468,7 @@ function listen(){
   const group=t.closest('[data-category]');if(group){ui.category=group.dataset.category;render();return;}
   const hist=t.closest('[data-history-kind]');if(hist){ui.historyKind=hist.dataset.historyKind;render();return;}
   const h=t.closest('[data-asset]');if(h){ui.assetKey=h.dataset.asset;go('asset');return;}
+  const detail=t.closest('[data-detail]');if(detail){ui.detailId=ui.detailId===detail.dataset.detail?'':detail.dataset.detail;render();return;}
   const quote=t.closest('[data-quote]');if(quote){await updateQuote(quote.dataset.quote);return;}
   const action=t.closest('[data-action]');
   if(!action)return;
