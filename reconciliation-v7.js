@@ -86,6 +86,25 @@ E.gaps=function(state,owner='family',today=E.isoNow()){
  // não uma cotação para 2026. O aviso nunca deve solicitar o mesmo arquivo.
  const historical=state&&state.spouseHistoricalPosition;
  const revised=base.map(issue=>{
+  if(issue.owner==='spouse'&&issue.code==='cost-reconcile'){
+   const led=E.ledger(state,'spouse'),port=E.portfolio(state,'spouse');
+   const pend=port.holdings.filter(h=>{
+    if(h.value===0&&/^[A-Z]{4}1[23]$/.test(E.codeOf(h.code)))return false;
+    if(h.group==='Tesouro')return !(h.applied>0);
+    const b=led.stocks.get('spouse|'+E.codeOf(h.code));
+    return !(b&&!b.uncertain&&b.qty>0&&Math.abs(b.qty-h.qty)<=Math.max(.00001,.002*h.qty));
+   }).map(h=>{
+    const b=led.stocks.get('spouse|'+E.codeOf(h.code));
+    const gap=Math.round((h.qty-(b?.qty||0))*100000)/100000;
+    return h.code+': posição '+h.qty+', histórico '+Math.round((b?.qty||0)*100000)/100000+
+     (gap?' (diferença '+gap+')':'')+'. Custo de origem ainda não demonstrado';
+   });
+   if(!pend.length)return null;
+   return {...issue,level:'warning',code:'open-cost-unverified',
+    title:'Jessica: '+pend.length+' posições com custo de origem pendente',
+    why:pend.join(' | '),
+    action:'Não usar cotação da posição de 2024 como custo fiscal. Necessário custo de aquisição das unidades históricas, quando comprovável por IRPF ou informe de corretora.'};
+  }
   if(issue.owner==='me'&&issue.code==='cost-reconcile'){
    const led=E.ledger(state,'me'),port=E.portfolio(state,'me');
    const costFixed=new Set(extraOpenBasis(state,'me').map(x=>x.code));
