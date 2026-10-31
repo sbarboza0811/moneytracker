@@ -57,6 +57,31 @@ E.reconciliationReport=function(state,owner='family',period='all',today=E.isoNow
   incomplete:a.incomplete,unmatched:a.unmatched,
   annualIncome:(state?.reconciliation?.annualIncome||[]).filter(x=>x.year===2024)};
 };
+
+/* Pendências têm de ser apuradas após a conciliação: não usar a lista bruta
+   de vendas da B3 como se todas ainda estivessem sem custo. */
+const originalGaps=E.gaps;
+E.gaps=function(state,owner='family',today=E.isoNow()){
+ const base=originalGaps(state,owner,today);
+ if(!getEntries(state).length)return base.filter(x=>x.code!=='cash-flow-coverage');
+ const includeSpouse=ownerSet(owner).includes('spouse');
+ const items=base.filter(x=>x.code!=='cash-flow-coverage'&&
+  !(includeSpouse&&x.owner==='spouse'&&x.code==='unverified-sales'));
+ if(!includeSpouse)return items;
+ const report=audit(state,'spouse','all',today),g=E.gains(state,'spouse','all',today);
+ const pending=report.checks.filter(x=>!x.matched||x.status!=='CALCULAVEL_BRUTO');
+ if(g.excludedSales>0){
+  const codes=[...new Set(pending.map(x=>x.code))];
+  items.push({level:'critical',owner:'spouse',code:'reconciliation-unverified',
+   title:g.excludedSales+' venda(s) ainda sem custo verificado (Jessica)',
+   why:pending.length+' grupos de operações com custo provisório/incompleto. '+
+    (codes.length?'Ativos: '+codes.join(', ')+'. ':'')+
+    'As '+report.verified+' vendas conciliadas não estão nesta pendência.',
+   action:'Veja abaixo cada data e ativo. Consulte notas de aquisição ou custo de eventos societários; não é necessário buscar 2024 sem negociações.'});
+ }
+ return items;
+};
+
 E.gains=function(state,owner='family',period='all',today=E.isoNow()){
  const base=originalGains(state,owner,period,today);
  if(!getEntries(state).length||!ownerSet(owner).includes('spouse'))return base;
