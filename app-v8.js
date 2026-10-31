@@ -182,6 +182,20 @@ function pageIncome(){
  box(header('Pagamentos individuais',d.payouts.length+' proventos no intervalo')+(d.payouts.length?d.payouts.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,U.limit).map(x=>'<div class="m8-tx"><div><b>'+escape(x.code)+'</b><small>'+escape(me(x.owner))+' · '+E.dateBR(x.date)+' · '+escape(x.type)+'</small></div><strong>'+money(x.amount)+'</strong></div>').join(''):empty('Nenhum provento neste período.'))+
  (d.payouts.length>U.limit?'<button class="m8-btn sub" data-action="more">Carregar mais</button>':''));
 }
+function compareTrend(parts,from,to){
+ const byOwner=parts.map(p=>monthly(p.sales,p.div,from,to));
+ const data=byOwner[0].map((r,i)=>({date:r.date,a:r.sales+r.dividends,b:(byOwner[1][i]?.sales||0)+(byOwner[1][i]?.dividends||0)}));
+ if(!data.length)return empty('Sem registros comparáveis neste intervalo.');
+ const visible=data.slice(-24),w=Math.max(700,visible.length*46),h=245,baseline=135;
+ const max=Math.max(1,...visible.flatMap(p=>[Math.abs(p.a),Math.abs(p.b)])),scale=95/max;
+ const rects=visible.map((p,i)=>{
+  const x=38+(i+.5)*(w-80)/visible.length;
+  const draw=(value,dx,color)=>'<rect x="'+(x+dx)+'" y="'+(value>=0?baseline-Math.abs(value)*scale:baseline)+'" width="14" height="'+Math.max(.8,Math.abs(value)*scale)+'" rx="3" fill="'+color+'"><title>'+escape(p.date)+' · '+money(value)+'</title></rect>';
+  return '<g data-month="'+escape(p.date)+'" role="button" tabindex="0">'+draw(p.a,-15,'#5478ec')+draw(p.b,3,'#16b89e')+'<text x="'+x+'" y="227" text-anchor="middle" fill="#8b99b0" font-size="10">'+escape(p.date.slice(5))+'</text></g>';
+ }).join('');
+ return '<div class="m8-plot"><svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" aria-label="Comparação de resultados mensais reais dos titulares"><line x1="36" y1="'+baseline+'" x2="'+(w-25)+'" y2="'+baseline+'" stroke="#c3d0e2"/>'+rects+'</svg></div>'+
+ '<div class="m8-legend"><span><i style="background:#5478ec"></i>'+escape(parts[0].name)+'</span><span><i style="background:#16b89e"></i>'+escape(parts[1].name)+'</span></div><p class="m8-hint">Lucro/prejuízo de vendas conciliadas somado aos proventos, sem valorização em aberto. Clique em um mês para explorar operações.</p>';
+}
 function pageCompare(){
  const x=initialData('me'),y=initialData('spouse'),r=scope();
  const parts=[['me',x],['spouse',y]].map(([o,z])=>{
@@ -195,6 +209,7 @@ function pageCompare(){
  return box(header('Laboratório de comparações','Mesmo período e critérios para os dois lados')+
  '<div class="m8-pills"><button data-compare="owners" class="'+(U.compare==='owners'?'sel':'')+'">Samuel × Jessica</button><button data-compare="classes" class="'+(U.compare==='classes'?'sel':'')+'">Classes de ativos</button><button data-compare="years" class="'+(U.compare==='years'?'sel':'')+'">Ano contra ano</button></div>'+
  '<div class="m8-compare">'+curr.map((z,i)=>'<div><small>'+escape(z.name)+'</small><strong>'+money(z.value)+'</strong><div class="m8-track"><i style="width:'+Math.min(100,Math.max(0,z.value)*100/Math.max(1,...curr.map(t=>t.value)))+'%;background:'+PALETTE[i%PALETTE.length]+'"></i></div></div>').join('')+'</div>'+
+ (U.compare==='owners'?compareTrend(parts,r.from,r.to):'')+
  '<p class="m8-hint">'+(U.compare==='years'?'Comparação do resultado bruto realizado por ano, sem valorização em aberto.':U.compare==='classes'?'Distribuição atual por classe, não rentabilidade histórica.':'Valores de posições de cada titular podem ter bases de avaliação diferentes. Não equivalem à rentabilidade corrigida por aportes.')+'</p>')+
  '<div class="m8-grid m8-two">'+box(header('Resultado realizado', 'Vendas e proventos separados por titular')+
  parts.map(p=>'<div class="m8-compare-line"><b>'+escape(p.name)+'</b><span>Vendas '+money(p.realized)+'</span><span>Proventos '+money(p.dividends)+'</span><strong>'+money(p.realized+p.dividends)+'</strong></div>').join(''))+
@@ -361,7 +376,7 @@ function listen(){
   if(b.dataset.period){U.period=b.dataset.period;U.showCustom=b.dataset.period==='custom';return render();}
   if(b.dataset.grain){U.grain=b.dataset.grain;return render();}
   if(b.dataset.compare){U.compare=b.dataset.compare;return render();}
-  if(b.dataset.class){U.classe=b.dataset.class;return navigate('portfolio');}
+  if(b.dataset.class){U.classe=b.dataset.class;return navigate(U.page==='result'?'result':'portfolio');}
   if(b.dataset.asset){U.assetKey=b.dataset.asset;return navigate('asset');}
   if(b.dataset.sale){U.saleId=b.dataset.sale;return navigate('sale');}
   if(b.dataset.history){U.historyKind=b.dataset.history;return render();}
