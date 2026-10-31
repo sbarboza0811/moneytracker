@@ -10,3 +10,9 @@
 .mt-cloud-bar{position:fixed;z-index:5000;right:12px;bottom:74px;background:#173b32;color:white;box-shadow:0 6px 23px #001a122a;border-radius:30px;display:flex;align-items:center;gap:8px;padding:7px 9px;font-size:11px;max-width:95vw}
 .mt-cloud-bar[hidden]{display:none!important}.mt-cloud-bar button{border:0;border-radius:18px;padding:7px 8px;background:#e2f7e9;color:#146d50;cursor:pointer;font-weight:600;font-size:11px}
 @media(min-width:800px){.mt-cloud-bar{bottom:12px}}
+
+/* Evita sobreposição entre sincronização, mensagens e navegação no celular. */
+.mt-cloud-bar{bottom:75px;right:12px;left:auto;max-width:calc(100vw - 24px);flex-wrap:wrap;justify-content:flex-end}
+.toast{bottom:165px!important;right:12px!important;left:12px!important;margin-left:auto;max-width:min(420px,calc(100vw - 24px));z-index:7000}
+#mt-install-feedback{top:14px!important;bottom:auto!important;left:12px!important;right:12px!important;z-index:7500!important}
+@media(min-width:800px){.mt-cloud-bar{bottom:12px;right:12px}.toast{bottom:82px!important;left:auto!important;right:12px!important}}
