@@ -149,6 +149,38 @@ function ledger(state,owner='family'){
  }
  return{stocks,sales,problems,adjustments};
 }
+function treasuryLedger(state,owner='family'){
+ const selected=owner==='family'?['me','spouse']:[ownerOf(owner)];
+ const actions=(state.records||[]).filter(r=>r.t==='mov'&&selected.includes(ownerOf(r.owner))&&
+  norm(r.v[3]).startsWith('TESOURO ')&&['COMPRA','VENDA'].includes(norm(r.v[2]))&&recordDate(r))
+  .slice().sort((a,b)=>recordDate(a).localeCompare(recordDate(b))||
+   (norm(a.v[2])==='COMPRA'?0:1)-(norm(b.v[2])==='COMPRA'?0:1));
+ const stocks=new Map(),sales=[],problems=[];
+ for(const r of actions){
+  const o=ownerOf(r.owner),code=norm(r.v[3]),date=recordDate(r);
+  const qty=number(r.v[5]),amount=number(r.v[7]),kind=norm(r.v[2]),direction=norm(r.v[0]);
+  if(!(qty>0)||!Number.isFinite(amount)||amount<0)continue;
+  if(kind==='COMPRA'&&direction!=='CREDITO')continue;
+  if(kind==='VENDA'&&direction!=='DEBITO')continue;
+  const key=o+'|'+code;
+  if(!stocks.has(key))stocks.set(key,{owner:o,code,qty:0,cost:0});
+  const p=stocks.get(key);
+  if(kind==='COMPRA'){p.qty+=qty;p.cost+=amount;}
+  else{
+   const prev=p.qty,covered=Math.min(qty,Math.max(0,prev)),cost=covered>0?p.cost*covered/prev:0;
+   const missing=Math.max(0,qty-covered);
+   const verified=missing<0.000001;
+   sales.push({owner:o,code,date,profit:verified?amount-cost:null,recognized:verified,
+    uncertain:!verified,covered,qty,gross:amount,unmatched:!verified,
+    reason:verified?'':'Aquisição anterior do Tesouro não encontrada',group:'Tesouro'});
+   if(!verified)problems.push({owner:o,code,qty:missing,date,reason:'Compra anterior do Tesouro ausente'});
+   p.qty=Math.max(0,prev-covered);p.cost=Math.max(0,p.cost-cost);
+   if(p.qty<0.000001){p.qty=0;p.cost=0;}
+  }
+ }
+ return{stocks,sales,problems};
+}
+
 function makeHistoricalHoldings(led,owner){
  return Array.from(led.stocks.values()).filter(p=>p.owner===owner&&p.qty>0.00000001).map(p=>({
   owner,code:p.code,product:p.code,group:classify(p.code,''),qty:p.qty,
@@ -396,6 +428,6 @@ async function importXlsx(state,owner,files,xlsx){
  };
  return{next,summary:{owner:o,files:input.length,added:newRecords.length,duplicates,invalid,positionsChanged,details:filesStats}};
 }
-root.MoneyTrackerEngine={normalizeState,newState,portfolio,ledger,gains,gaps,cutoff,periodLabel,
+root.MoneyTrackerEngine={normalizeState,newState,portfolio,ledger,treasuryLedger,gains,gaps,cutoff,periodLabel,
  parseSheet,parsePositionRows,importXlsx,dateISO,dateBR,isoNow,fmt,money,norm,number,codeOf,recordDate,fingerprint,cleanRow,rowValid,dividendRows,classify,LABELS};
 })(window);
