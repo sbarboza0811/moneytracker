@@ -3,7 +3,7 @@
 const E=root.MoneyTrackerEngine;
 if(!E)throw Error('Motor financeiro indisponível');
 let S=E.newState(),auth=false,busy=false,toastTimer=null,analysis=null,derivedCache=null;
-const U={page:'home',owner:'family',period:'1y',from:'',to:'',classe:'all',grain:'month',compare:'owners',search:'',sort:'value',importOwner:'me',assetKey:'',saleId:'',historyKind:'all',limit:70,importMessage:''};
+const U={page:'home',owner:'family',period:'1y',from:'',to:'',classe:'all',grain:'month',compare:'owners',search:'',sort:'value',importOwner:'me',assetKey:'',saleId:'',historyKind:'all',limit:70,importMessage:'',quoteLoading:false,quoteProgress:'',quoteErrors:[]};
 const NAV=[['home','⌂','Início'],['portfolio','▦','Carteira'],['result','↗','Resultados'],['compare','⇄','Comparar'],['flow','◷','Fluxo'],['needs','✓','Diagnóstico']];
 const money=E.money,fmt=E.fmt;
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -109,6 +109,30 @@ function donut(items,total){
  return '<div class="m8-donut-box"><div class="m8-donut" style="background:conic-gradient('+css+')" aria-label="Distribuição patrimonial"><div><span>Posições</span><strong>'+money(total)+'</strong></div></div><div class="m8-donut-legend">'+items.filter(x=>x.value>0).map((x,i)=>'<button class="m8-legend-row" data-class="'+escape(x.name)+'"><i style="background:'+PALETTE[i%PALETTE.length]+'"></i><span>'+escape(x.name)+'</span><b>'+(100*x.value/total).toFixed(1).replace('.',',')+'%</b></button>').join('')+'</div></div>';
 }
 function alloc(d){const m=new Map();for(const h of d.holdings){const k=group(h.code,h.group);m.set(k,(m.get(k)||0)+Number(h.value||0));}return [...m].map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value);}
+function quoteMeta(code){
+ const q=S.quotes?.[code];
+ if(!q||!(Number(q.price)>0))return{quote:q||null,fresh:false};
+ const age=Date.now()-Date.parse(q.at||''),marketAge=q.marketDate?Date.now()-Date.parse(String(q.marketDate)+'T12:00:00Z'):null;
+ const fresh=/brapi|capital agora/i.test(String(q.provider||''))&&Number.isFinite(age)&&age>=0&&age<=4*86400000&&
+  (marketAge===null||(Number.isFinite(marketAge)&&marketAge>=-86400000&&marketAge<=8*86400000));
+ return{quote:q,fresh};
+}
+function pricedHoldings(){
+ return E.portfolio(S,U.owner).holdings.filter(h=>!h.fixedIncome&&h.group!=='Tesouro'&&/^[A-Z][A-Z0-9]{3,11}$/.test(h.code));
+}
+function quoteSummary(){
+ const positions=pricedHoldings(),unique=[...new Set(positions.map(h=>h.code))];
+ const updated=unique.filter(c=>quoteMeta(c).fresh).length;
+ const totalMarket=positions.filter(h=>h.origin==='quote').reduce((v,h)=>v+Number(h.value||0),0);
+ return '<div class="m8-quote-summary"><div><small>Ativos cotados</small><strong>'+updated+' / '+unique.length+'</strong></div>'+
+ '<div><small>Posições atualizadas</small><strong>'+positions.filter(h=>h.origin==='quote').length+' / '+positions.length+'</strong></div>'+
+ '<div><small>Posições a mercado</small><strong>'+money(totalMarket)+'</strong></div></div>';
+}
+function quoteUpdateControls(){
+ return '<div class="m8-quote-controls"><button class="m8-btn primary" data-action="refresh-quotes" '+(U.quoteLoading?'disabled':'')+'>'+(U.quoteLoading?'Consultando…':'↻ Atualizar todas as cotações')+'</button>'+
+ '<span id="m8-quote-progress" role="status" aria-live="polite">'+escape(U.quoteProgress||'Consulte o último preço disponível por ativo.')+'</span></div>'+
+ (U.quoteErrors?.length?'<div class="m8-quote-errors"><b>'+U.quoteErrors.length+' ativo(s) sem cotação</b><p>'+escape(U.quoteErrors.slice(0,8).map(x=>x.symbol).join(', '))+'</p><small>Sem inventar preços nem alterar o custo de aquisição.</small></div>':'');
+}
 function assetRow(h,d){
  const b=basisFor(h,d.ledger),gain=b.verified?money(h.value-b.cost):'—';
  return '<button class="m8-asset-row" data-asset="'+escape(h.owner+'|'+h.code)+'"><span class="m8-token">'+escape(h.fixedIncome?'RF':h.code.slice(0,2))+'</span><span class="m8-asset-title"><strong>'+escape(h.code)+'</strong><small>'+escape(me(h.owner))+' · '+escape(group(h.code,h.group))+(h.fixedIncome?' · Saldo nominal':'')+'</small></span><span class="m8-asset-money"><strong>'+money(h.value)+'</strong><small class="'+(b.verified?'positive':'muted')+'">'+gain+'</small></span><b>›</b></button>';
@@ -151,8 +175,9 @@ function confirmedWealthData(){
   let invested=0,gain=0,unknown=0;
   for(const h of holdings){
    const basis=basisFor(h,d.ledger);
-   if(basis.verified){invested+=basis.cost;gain+=h.value-basis.cost;}
-   else unknown+=h.value;
+   const snapshotValue=h.origin==='quote'&&Number.isFinite(+h.snapshotValue)?+h.snapshotValue:h.value;
+   if(basis.verified){invested+=basis.cost;gain+=snapshotValue-basis.cost;}
+   else unknown+=snapshotValue;
   }
   snapshots.push({date:snap.date,invested:round(invested),profit:round(gain),unknown:round(unknown),n:holdings.length});
  }
@@ -199,7 +224,7 @@ function pagePortfolio(){
  const d=rows(),classes=alloc(d);let sorted=d.holdings.slice();
  const q=U.search.toLowerCase();if(q)sorted=sorted.filter(h=>(h.code+' '+h.product+' '+h.institution).toLowerCase().includes(q));
  sorted.sort((a,b)=>U.sort==='name'?a.code.localeCompare(b.code):U.sort==='gain'?((basisFor(b,d.ledger).verified?b.value-basisFor(b,d.ledger).cost:-Infinity)-(basisFor(a,d.ledger).verified?a.value-basisFor(a,d.ledger).cost:-Infinity)):b.value-a.value);
- return kpi(d)+dataNotice(d)+'<div class="m8-grid m8-two">'+box(header('Alocação por classe','Clique para filtrar o restante da carteira')+donut(classes,d.total))+
+ return kpi(d)+dataNotice(d)+box(header('Cotações da carteira','Atualize preços do último pregão; renda fixa e Tesouro ficam separados')+quoteSummary()+quoteUpdateControls()+'<p class="m8-hint">Fonte: <a href="https://capitalagora.com.br/api" target="_blank" rel="noopener">Capital Agora</a> (B3) ou brapi.dev; cobertura parcial quando indisponível.</p>')+'<div class="m8-grid m8-two">'+box(header('Alocação por classe','Clique para filtrar o restante da carteira')+donut(classes,d.total))+
  box(header('Valor por classe','Comparação dos saldos atuais')+'<div class="m8-classbars">'+classes.map((c,i)=>'<button data-class="'+escape(c.name)+'" class="m8-classbar"><span>'+escape(c.name)+'</span><div><i style="background:'+PALETTE[i%PALETTE.length]+';width:'+Math.max(1,100*c.value/Math.max(1,classes[0]?.value))+'%"></i></div><strong>'+money(c.value)+'</strong></button>').join('')+'</div>')+'</div>'+
  box(header('Explorador de ativos',sorted.length+' posições no filtro atual')+
  '<div class="m8-row m8-wrap"><input id="m8-search" class="m8-input m8-grow" placeholder="Buscar código, ativo ou instituição" value="'+escape(U.search)+'"/>'+
@@ -386,9 +411,19 @@ function pageImport(){
  Object.entries(S.sources||{}).slice(-18).reverse().map(([name,v])=>'<div class="m8-tx"><div><b>'+escape(name)+'</b><small>'+escape(v.type||'')+' · '+escape(me(v.owner||'me'))+'</small></div><strong>'+Number(v.accepted||0)+' registros</strong></div>').join(''));
 }
 function pageQuotes(){
- const p=rows().holdings.filter(x=>!x.fixedIncome);
- return box(header('Cotações de ativos','Consulta sob demanda, sem assumir preço de mercado quando indisponível')+
- p.slice(0,U.limit).map(h=>'<div class="m8-tx"><div><b>'+escape(h.code)+'</b><small>'+escape(me(h.owner))+(S.quotes?.[h.code]?' · '+money(S.quotes[h.code].price):' · Sem cotação nova')+'</small></div><button class="m8-btn sub" data-quote="'+escape(h.code)+'">Consultar</button></div>').join(''));
+ const holdings=pricedHoldings();
+ return box(header('Cotações da carteira','Preço unitário, quantidade, valor e referência')+
+ quoteSummary()+quoteUpdateControls()+
+ '<p class="m8-hint">Cotação é o preço disponível do provedor, não necessariamente em tempo real. Ativos sem preço válido permanecem avaliados pelo documento de origem.</p>'+
+ (holdings.length?holdings.slice(0,U.limit).map(h=>{
+  const m=quoteMeta(h.code),q=m.quote,price=m.fresh?money(q.price):'—',
+  value=m.fresh?money(h.qty*Number(q.price)):'—',
+  dt=q?.marketDate?E.dateBR(q.marketDate):q?.at?E.dateBR(String(q.at).slice(0,10)):'';
+  return '<div class="m8-quote-row"><div class="m8-quote-name"><b>'+escape(h.code)+'</b><small>'+escape(me(h.owner))+' · '+fmt(h.qty)+' un.</small><small>'+(m.fresh?'Cotação '+escape(dt)+' · '+escape(q.provider):q?'Preço vencido · '+escape(dt):'Sem cotação disponível')+'</small></div>'+
+  '<div class="m8-quote-prices"><b>'+price+'</b><strong>'+value+'</strong></div>'+
+  '<button class="m8-btn sub" data-quote="'+escape(h.code)+'" '+(U.quoteLoading?'disabled':'')+'>Consultar</button></div>';
+ }).join('')+(holdings.length>U.limit?'<button class="m8-btn sub" data-action="more">Ver mais</button>':''):empty('Nenhum ativo negociado identificado.'))+
+ '<p class="m8-hint">Fontes: <a href="https://capitalagora.com.br/api" target="_blank" rel="noopener">Capital Agora</a> (fechamento B3) e brapi.dev (quando disponível). Preços sujeitos a atraso.</p>');
 }
 function pageMore(){
  return box(header('Configurações e conta','Nomes editáveis, sincronização e segurança')+
@@ -456,12 +491,41 @@ async function importFiles(files){
  }catch(err){U.importMessage='Nenhum registro alterado. '+(err.message||err);notify(U.importMessage,true);}
  finally{busy=false;render();}
 }
-async function quote(symbol){
- try{notify('Consultando '+symbol+'…');const r=await root.MoneyTrackerCloudV7.quote(symbol);
-  if(!(Number(r.price)>0))throw Error('Sem cotação válida');
-  save({...S,quotes:{...S.quotes,[symbol]:{price:Number(r.price),at:r.at||new Date().toISOString(),provider:r.provider||'brapi'}}});notify(symbol+' atualizado: '+money(r.price));
- }catch(err){notify(err.message||'Falha na consulta',true);}
+async function refreshAllQuotes(auto=false,symbols=null){
+ if(!auth||U.quoteLoading)return;
+ const holdings=E.portfolio(S,'family').holdings.filter(h=>!h.fixedIncome&&h.group!=='Tesouro'&&/^[A-Z][A-Z0-9]{3,11}$/.test(h.code));
+ let codes=[...new Set(holdings.map(h=>h.code))];
+ if(symbols)codes=codes.filter(x=>symbols.includes(x));
+ if(auto){
+  const now=Date.now();let last=0;
+  try{last=Number(root.localStorage.getItem('moneytracker-quotes-autorefresh')||0);}catch(_){}
+  if(now-last<6*3600000)return;
+  try{root.localStorage.setItem('moneytracker-quotes-autorefresh',String(now));}catch(_){}
+  codes=codes.filter(x=>!quoteMeta(x).fresh||now-Date.parse(S.quotes[x].at)>6*3600000);
+ }
+ if(!codes.length)return;
+ U.quoteLoading=true;U.quoteErrors=[];U.quoteProgress='Consultando 0 de '+codes.length+' ativos…';render();
+ const updates={},failures=[];let index=0,done=0;
+ async function worker(){
+  while(index<codes.length){
+   const symbol=codes[index++];
+   try{
+    const q=await root.MoneyTrackerCloudV7.quote(symbol);
+    if(!(Number(q.price)>0)||String(q.symbol||symbol).toUpperCase()!==symbol)throw Error('Preço não corresponde ao ativo');
+    updates[symbol]={price:Number(q.price),at:q.at||new Date().toISOString(),marketDate:q.marketDate||null,
+      provider:q.provider||'Fonte não identificada',changePercent:q.changePercent,type:q.type||'cotacao'};
+   }catch(error){failures.push({symbol,message:String(error.message||error)});}
+   done++;U.quoteProgress='Consultados '+done+' de '+codes.length+' · '+Object.keys(updates).length+' preços';
+   const status=el('m8-quote-progress');if(status)status.textContent=U.quoteProgress;
+  }
+ }
+ await Promise.all(Array.from({length:Math.min(4,codes.length)},()=>worker()));
+ U.quoteErrors=failures;U.quoteLoading=false;
+ U.quoteProgress=Object.keys(updates).length+' cotação(ões) atualizada(s)'+(failures.length?' · '+failures.length+' indisponível(is)':'')+'.';
+ if(Object.keys(updates).length)save({...S,quotes:{...S.quotes,...updates}});else render();
+ if(!auto)notify(U.quoteProgress,Object.keys(updates).length===0);
 }
+async function quote(symbol){return refreshAllQuotes(false,[symbol]);}
 function listen(){
  document.addEventListener('click',async ev=>{
   const b=ev.target.closest('button,[data-month]');if(!b)return;
@@ -478,6 +542,7 @@ function listen(){
   if(b.dataset.month){const val=b.dataset.month;if(val.length===4){U.from=val+'-01-01';U.to=val+'-12-31';}else{U.from=val+'-01';const d=new Date(Number(val.slice(0,4)),Number(val.slice(5,7)),0);U.to=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}U.period='custom';U.showCustom=true;return navigate('result');}
   if(b.dataset.quote)return quote(b.dataset.quote);
   const a=b.dataset.action;if(!a)return;
+  if(a==='refresh-quotes')return refreshAllQuotes(false);
   if(a==='theme-toggle')return setTheme(currentTheme()==='dark'?'light':'dark');
   if(a==='more'){U.limit+=70;return render();}
   if(a==='filter-more'){U.showCustom=!U.showCustom;return render();}
@@ -513,7 +578,7 @@ function listen(){
 }
 root.MoneyTrackerAppV7={
  getState:()=>S,setState:d=>{S=E.normalizeState(d);derivedCache=null;analysis=null;render();},
- loginReady:()=>{auth=true;el('mt7-auth').hidden=true;render();},
+ loginReady:()=>{auth=true;el('mt7-auth').hidden=true;render();setTimeout(()=>refreshAllQuotes(true),900);},
  loginNeeded:()=>{auth=false;el('mt7-auth').hidden=false;},
  getUi:()=>U,notify,render,
  onSyncError:msg=>notify(msg,true),
