@@ -109,33 +109,37 @@ function donut(items,total){
  return '<div class="m8-donut-box"><div class="m8-donut" style="background:conic-gradient('+css+')" aria-label="Distribuição patrimonial"><div><span>Posições</span><strong>'+money(total)+'</strong></div></div><div class="m8-donut-legend">'+items.filter(x=>x.value>0).map((x,i)=>'<button class="m8-legend-row" data-class="'+escape(x.name)+'"><i style="background:'+PALETTE[i%PALETTE.length]+'"></i><span>'+escape(x.name)+'</span><b>'+(100*x.value/total).toFixed(1).replace('.',',')+'%</b></button>').join('')+'</div></div>';
 }
 function alloc(d){const m=new Map();for(const h of d.holdings){const k=group(h.code,h.group);m.set(k,(m.get(k)||0)+Number(h.value||0));}return [...m].map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value);}
-function quoteMeta(code){
- const q=S.quotes?.[code];
- if(!q||!(Number(q.price)>0))return{quote:q||null,fresh:false};
- const age=Date.now()-Date.parse(q.at||''),marketAge=q.marketDate?Date.now()-Date.parse(String(q.marketDate)+'T12:00:00Z'):null;
- const fresh=/brapi|capital agora/i.test(String(q.provider||''))&&Number.isFinite(age)&&age>=0&&age<=4*86400000&&
-  (marketAge===null||(Number.isFinite(marketAge)&&marketAge>=-86400000&&marketAge<=8*86400000));
- return{quote:q,fresh};
+function quoteMeta(code,positionDate=''){
+ const q=S.quotes?.[code],price=Number(q?.price);
+ const date=String(q?.marketDate||q?.at||'').slice(0,10);
+ const validDate=/^\d{4}-\d{2}-\d{2}$/.test(date)&&Number.isFinite(Date.parse(date+'T12:00:00Z'));
+ const dateTime=validDate?Date.parse(date+'T12:00:00Z'):NaN;
+ const validSource=/brapi|capital agora/i.test(String(q?.provider||''));
+ const available=!!q&&validSource&&Number.isFinite(price)&&price>0&&validDate&&dateTime<=Date.now()+86400000&&(!positionDate||date>=positionDate);
+ const fetchedAge=Date.now()-Date.parse(q?.at||'');
+ const fresh=available&&Number.isFinite(fetchedAge)&&fetchedAge>=0&&fetchedAge<=4*86400000&&Date.now()-dateTime<=8*86400000;
+ return{quote:q||null,date,available,fresh,stale:available&&!fresh};
 }
 function pricedHoldings(){
  return E.portfolio(S,U.owner).holdings.filter(h=>!h.fixedIncome&&h.group!=='Tesouro'&&/^[A-Z][A-Z0-9]{3,11}$/.test(h.code));
 }
 function quoteSummary(){
  const positions=pricedHoldings(),unique=[...new Set(positions.map(h=>h.code))];
- const updated=unique.filter(c=>quoteMeta(c).fresh).length;
- const totalMarket=positions.filter(h=>h.origin==='quote').reduce((v,h)=>v+Number(h.value||0),0);
- return '<div class="m8-quote-summary"><div><small>Ativos cotados</small><strong>'+updated+' / '+unique.length+'</strong></div>'+
- '<div><small>Posições atualizadas</small><strong>'+positions.filter(h=>h.origin==='quote').length+' / '+positions.length+'</strong></div>'+
- '<div><small>Posições a mercado</small><strong>'+money(totalMarket)+'</strong></div></div>';
+ const recent=[...new Set(positions.filter(h=>h.origin==='quote'&&!h.quoteStale).map(h=>h.code))].length;
+ const cached=[...new Set(positions.filter(h=>h.origin==='quote'&&h.quoteStale).map(h=>h.code))].length;
+ const retained=positions.filter(h=>h.origin==='quote').reduce((v,h)=>v+Number(h.value||0),0);
+ return '<div class="m8-quote-summary"><div><small>Cotações recentes</small><strong>'+recent+' / '+unique.length+'</strong></div>'+
+ '<div><small>Última cotação salva</small><strong>'+cached+' ativo(s)</strong></div>'+
+ '<div><small>Valor com cotação salva</small><strong>'+money(retained)+'</strong></div></div>';
 }
 function quoteUpdateControls(){
  return '<div class="m8-quote-controls"><button class="m8-btn primary" data-action="refresh-quotes" '+(U.quoteLoading?'disabled':'')+'>'+(U.quoteLoading?'Consultando…':'↻ Atualizar todas as cotações')+'</button>'+
  '<span id="m8-quote-progress" role="status" aria-live="polite">'+escape(U.quoteProgress||'Consulte o último preço disponível por ativo.')+'</span></div>'+
- (U.quoteErrors?.length?'<div class="m8-quote-errors"><b>'+U.quoteErrors.length+' ativo(s) sem cotação</b><p>'+escape(U.quoteErrors.slice(0,8).map(x=>x.symbol).join(', '))+'</p><small>Sem inventar preços nem alterar o custo de aquisição.</small></div>':'');
+ (U.quoteErrors?.length?'<div class="m8-quote-errors"><b>'+U.quoteErrors.length+' ativo(s) sem nova cotação</b><p>'+escape(U.quoteErrors.slice(0,8).map(x=>x.symbol).join(', '))+'</p><small>Usando a última cotação salva ou a posição B3 mais recente, com a data indicada. O custo de aquisição não muda.</small></div>':'');
 }
 function assetRow(h,d){
  const b=basisFor(h,d.ledger),gain=b.verified?money(h.value-b.cost):'—';
- const q=quoteMeta(h.code),priceInfo=!h.fixedIncome&&(q.fresh?' · '+money(q.quote.price)+'/un.':h.snapshotPrice>0?' · B3 '+money(h.snapshotPrice)+'/un.':'');
+ const priceInfo=!h.fixedIncome&&(h.origin==='quote'?(h.quoteStale?' · Últ. cot. ':' · Cot. ')+money(h.unit)+'/un.':h.snapshotPrice>0?' · B3 '+money(h.snapshotPrice)+'/un.':'');
  return '<button class="m8-asset-row" data-asset="'+escape(h.owner+'|'+h.code)+'"><span class="m8-token">'+escape(h.fixedIncome?'RF':h.code.slice(0,2))+'</span><span class="m8-asset-title"><strong>'+escape(h.code)+'</strong><small>'+escape(me(h.owner))+' · '+escape(group(h.code,h.group))+(h.fixedIncome?' · Saldo nominal':'')+priceInfo+'</small></span><span class="m8-asset-money"><strong>'+money(h.value)+'</strong><small class="'+(b.verified?'positive':'muted')+'">'+gain+'</small></span><b>›</b></button>';
 }
 function kpi(d){return '<div class="m8-kpis">'+iconStat('Patrimônio representado',money(d.total),d.holdings.length+' posições · valores de fontes diferentes','blue','portfolio')+iconStat('Resultado realizado',money(d.realized+d.dividends),'Vendas + proventos do período','teal','result')+iconStat('Proventos',money(d.dividends),d.payouts.length+' pagamentos','violet','income')+iconStat('Valorização apurada',d.openGain.matched?money(d.openGain.gain):'—',d.openGain.missing+' posições sem valorização','orange','flow')+'</div>';}
@@ -161,11 +165,16 @@ function lineChart(points,format='money'){
  return '<div class="m8-plot"><svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" aria-label="Evolução dos valores registrados"><defs><linearGradient id="m8area" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#567af3" stop-opacity=".20"/><stop offset="100%" stop-color="#567af3" stop-opacity="0"/></linearGradient></defs><path d="'+path+' L'+x(points.length-1)+' '+(h-pad)+' L'+pad+' '+(h-pad)+'Z" fill="url(#m8area)"/><path d="'+path+'" fill="none" stroke="#5078ee" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'+circles+'<text x="'+pad+'" y="'+(h-5)+'" fill="#8593a8" font-size="11">'+escape(E.dateBR(points[0].date))+'</text><text x="'+(w-pad)+'" y="'+(h-5)+'" text-anchor="end" fill="#8593a8" font-size="11">'+escape(E.dateBR(points.at(-1).date))+'</text></svg></div>';
 }
 function dataNotice(d){
- if(d.p.valuation==='mixed')return '<div class="m8-notice">ℹ️ A visão reúne valores de mercado e posições estimadas. Não considere o total uma cotação atual de todos os ativos.</div>';
- if(d.p.valuation==='historical')return '<div class="m8-notice">ℹ️ Algumas posições estão avaliadas pelo custo histórico, não pelo preço de mercado.</div>';
- return '';
+ const old=d.holdings.filter(h=>h.origin==='quote'&&h.quoteStale).length;
+ const b3=d.holdings.filter(h=>h.origin==='position'&&h.group!=='Tesouro'&&!h.fixedIncome).length;
+ let notices='';
+ if(old||b3)notices+='<div class="m8-notice">ℹ️ '+(old?old+' posição(ões) usam a última cotação salva, que pode estar desatualizada. ':'')+
+ (b3?b3+' posição(ões) usam o último valor do relatório B3. ':'')+
+ 'Confira a data de referência em Cotações.</div>';
+ if(d.p.valuation==='mixed')notices+='<div class="m8-notice">A carteira mistura valores de mercado, valores históricos e saldos estimados. O patrimônio não representa necessariamente o preço de venda hoje.</div>';
+ else if(d.p.valuation==='historical')notices+='<div class="m8-notice">Algumas posições usam custo histórico, não cotação de mercado.</div>';
+ return notices;
 }
-
 function confirmedWealthData(){
  const owners=U.owner==='family'?['me','spouse']:[U.owner],d=initialData(U.owner),r=scope();
  const snapshots=[];
@@ -217,8 +226,10 @@ function wealthDashboard(){
 function pageHome(){
  const d=rows(),m=getMonths(d);
  const listed=pricedHoldings(),codes=[...new Set(listed.map(h=>h.code))],
-       fresh=codes.filter(code=>quoteMeta(code).fresh).length;
- const refreshBar='<div class="m8-home-refresh"><div class="m8-home-refresh-text"><b>Atualizar cotações</b><small>'+fresh+' de '+codes.length+' ativos com preço atualizado</small></div>'+
+       fresh=new Set(listed.filter(h=>h.origin==='quote'&&!h.quoteStale).map(h=>h.code)).size,
+       last=new Set(listed.filter(h=>h.origin==='quote'&&h.quoteStale).map(h=>h.code)).size,
+       b3=new Set(listed.filter(h=>h.origin==='position').map(h=>h.code)).size;
+ const refreshBar='<div class="m8-home-refresh"><div class="m8-home-refresh-text"><b>Atualizar cotações</b><small>'+fresh+' recentes · '+last+' últimas cotações · '+b3+' posições B3</small></div>'+
    '<button type="button" class="m8-btn primary m8-home-refresh-btn" data-action="refresh-quotes" aria-label="Atualizar cotações de todos os ativos" '+(U.quoteLoading||!codes.length?'disabled':'')+'>'+(U.quoteLoading?'⏳ Atualizando…':'↻ Atualizar agora')+'</button>'+
    '<span id="m8-quote-progress" role="status" aria-live="polite">'+escape(U.quoteProgress||'Valores de mercado conforme cotação disponível')+'</span></div>';
  return refreshBar+kpi(d)+dataNotice(d)+wealthDashboard()+
@@ -381,8 +392,8 @@ function pageAsset(){
  (!fixed.length&&!trades.length?empty('Nenhuma operação vinculada.'):'') )+
  (sales.length?box(header('Vendas e lucro','Clique para ver a apuração')+sales.slice(0,30).map(saleRow).join('')):'')+
  (!h.fixedIncome?box(header('Cotação do ativo','Preço unitário × quantidade (quando cotação disponível)')+
- '<p><strong>'+(quoteMeta(h.code).fresh?money(quoteMeta(h.code).quote.price):'Sem cotação válida')+'</strong> / unidade · '+fmt(h.qty)+' unidade(s)</p>'+
- (quoteMeta(h.code).fresh?'<p>Valor calculado: <b>'+money(h.qty*Number(quoteMeta(h.code).quote.price))+'</b> · '+escape(quoteMeta(h.code).quote.provider)+' · '+escape(E.dateBR(quoteMeta(h.code).quote.marketDate||String(quoteMeta(h.code).quote.at).slice(0,10)))+'</p>':h.snapshotPrice>0?'<p>Último preço registrado na Posição B3: <b>'+money(h.snapshotPrice)+'</b> (data '+escape(E.dateBR(h.date||''))+'). Não é cotação atual.</p>':'<p>Usando o valor de origem até encontrar cotação válida.</p>')+
+ '<p><strong>'+(h.origin==='quote'?money(h.unit):h.snapshotPrice>0?money(h.snapshotPrice):'Preço indisponível')+'</strong> / unidade · '+fmt(h.qty)+' unidade(s)</p>'+
+ (h.origin==='quote'?'<p>Valor calculado: <b>'+money(h.value)+'</b> · '+(h.quoteStale?'Última cotação salva, desatualizada':'Cotação disponível')+' · '+escape(h.quoteProvider||'')+' · '+escape(E.dateBR(h.quoteDate||''))+'</p>':h.snapshotPrice>0?'<p>Último preço registrado na posição B3: <b>'+money(h.snapshotPrice)+'</b> (data '+escape(E.dateBR(h.date||''))+'). Não é cotação atual.</p>':'<p>Usando o valor de origem até encontrar cotação válida.</p>')+
  '<button class="m8-btn sub" data-quote="'+escape(h.code)+'" '+(U.quoteLoading?'disabled':'')+'>Atualizar cotação</button>'):'');
 }
 function pageSale(){
@@ -421,19 +432,20 @@ function pageImport(){
 }
 function pageQuotes(){
  const holdings=pricedHoldings();
- return box(header('Cotações da carteira','Preço unitário, quantidade, valor e referência')+
+ return box(header('Cotações da carteira','Preço unitário, quantidade, valor e data da fonte')+
  quoteSummary()+quoteUpdateControls()+
- '<p class="m8-hint">Cotação é o preço disponível do provedor, não necessariamente em tempo real. Ativos sem preço válido permanecem avaliados pelo documento de origem.</p>'+
+ '<p class="m8-hint">Quando a consulta falha, utilizamos a última cotação armazenada ou o último valor B3, priorizando a referência mais recente. Preços antigos não são exibidos como atuais.</p>'+
  (holdings.length?holdings.slice(0,U.limit).map(h=>{
-  const m=quoteMeta(h.code),q=m.quote,hasB3=h.snapshotPrice>0&&h.origin!=='estimated',
-  price=m.fresh?money(q.price):hasB3?money(h.snapshotPrice):'—',
-  value=m.fresh?money(h.qty*Number(q.price)):hasB3?money(h.snapshotValue??h.value):'—',
-  dt=q?.marketDate?E.dateBR(q.marketDate):q?.at?E.dateBR(String(q.at).slice(0,10)):'';
-  return '<div class="m8-quote-row"><div class="m8-quote-name"><b>'+escape(h.code)+'</b><small>'+escape(me(h.owner))+' · '+fmt(h.qty)+' un.</small><small>'+(m.fresh?'Cotação '+escape(dt)+' · '+escape(q.provider):hasB3?'Última posição B3 · '+escape(E.dateBR(h.date||''))+' · não atual':q?'Preço vencido · '+escape(dt):'Sem cotação disponível')+'</small></div>'+
+  const fromQuote=h.origin==='quote',isOld=fromQuote&&h.quoteStale,hasB3=h.snapshotPrice>0&&h.origin!=='estimated';
+  const price=fromQuote?money(h.unit):hasB3?money(h.snapshotPrice):'—';
+  const value=fromQuote?money(h.value):hasB3?money(h.value):'—';
+  const date=fromQuote?h.quoteDate:h.date;
+  const origin=fromQuote?(isOld?'Última cotação salva (desatualizada)':'Cotação disponível')+' · '+escape(h.quoteProvider||''):(hasB3?'Última posição B3 (histórica)':'Sem cotação ou preço de posição');
+  return '<div class="m8-quote-row"><div class="m8-quote-name"><b>'+escape(h.code)+'</b><small>'+escape(me(h.owner))+' · '+fmt(h.qty)+' un.</small><small>'+origin+(date?' · '+escape(E.dateBR(date)):'')+'</small></div>'+
   '<div class="m8-quote-prices"><b>'+price+'</b><strong>'+value+'</strong></div>'+
   '<button class="m8-btn sub" data-quote="'+escape(h.code)+'" '+(U.quoteLoading?'disabled':'')+'>Consultar</button></div>';
  }).join('')+(holdings.length>U.limit?'<button class="m8-btn sub" data-action="more">Ver mais</button>':''):empty('Nenhum ativo negociado identificado.'))+
- '<p class="m8-hint">Fontes: <a href="https://capitalagora.com.br/api" target="_blank" rel="noopener">Capital Agora</a> (fechamento B3) e brapi.dev (quando disponível). Preços sujeitos a atraso.</p>');
+ '<p class="m8-hint">Fontes: <a href="https://capitalagora.com.br/api" target="_blank" rel="noopener">Capital Agora</a> (fechamento B3) e brapi.dev, quando disponível. O valor exibido pode estar desatualizado.</p>');
 }
 function pageMore(){
  return box(header('Configurações e conta','Nomes editáveis, sincronização e segurança')+
@@ -522,6 +534,10 @@ async function refreshAllQuotes(auto=false,symbols=null){
    try{
     const q=await root.MoneyTrackerCloudV7.quote(symbol);
     if(!(Number(q.price)>0)||String(q.symbol||symbol).toUpperCase()!==symbol)throw Error('Preço não corresponde ao ativo');
+    const previous=S.quotes?.[symbol];
+    const previousDate=String(previous?.marketDate||previous?.at||'').slice(0,10);
+    const incomingDate=String(q.marketDate||q.at||new Date().toISOString()).slice(0,10);
+    if(previousDate&&previousDate>incomingDate&&Number(previous?.price)>0)throw Error('Fonte retornou cotação anterior à armazenada');
     updates[symbol]={price:Number(q.price),at:q.at||new Date().toISOString(),marketDate:q.marketDate||null,
       provider:q.provider||'Fonte não identificada',changePercent:q.changePercent,type:q.type||'cotacao'};
    }catch(error){failures.push({symbol,message:String(error.message||error)});}
@@ -531,7 +547,7 @@ async function refreshAllQuotes(auto=false,symbols=null){
  }
  await Promise.all(Array.from({length:Math.min(4,codes.length)},()=>worker()));
  U.quoteErrors=failures;U.quoteLoading=false;
- U.quoteProgress=Object.keys(updates).length+' cotação(ões) atualizada(s)'+(failures.length?' · '+failures.length+' indisponível(is)':'')+'.';
+ U.quoteProgress=Object.keys(updates).length+' cotação(ões) atualizada(s)'+(failures.length?' · '+failures.length+' sem preço novo (mantida última referência)':'')+'.';
  if(Object.keys(updates).length)save({...S,quotes:{...S.quotes,...updates}});else render();
  if(!auto)notify(U.quoteProgress,Object.keys(updates).length===0);
 }
