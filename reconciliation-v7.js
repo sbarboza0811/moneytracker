@@ -160,7 +160,16 @@ E.gains=function(state,owner='family',period='all',today=E.isoNow()){
    profit:rounded(base.realized+base.dividends+openIncluded)};
 
  const a=audit(state,owner,period,today);
- const sales=a.sales.map(x=>a.overrides.has(x)?{...x,...a.overrides.get(x)}:x);
+ const sales=a.sales.map(x=>{
+  const row=a.overrides.has(x)?{...x,...a.overrides.get(x)}:x;
+  const partial=(state?.reconciliation?.mePartialSales||[]).find(p=>
+   p.owner===row.owner&&p.date===row.date&&p.code===E.codeOf(row.code)&&
+   Math.abs(Number(p.qty)-row.qty)<0.0000001&&
+   Math.abs(Number(p.gross)-row.gross)<0.02&&p.status==='CALCULAVEL_BRUTO');
+  if(!partial||!row.recognized||!Number.isFinite(Number(partial.basis)))return row;
+  return {...row,profit:Number(partial.gross)-Number(partial.basis),
+   reason:'Custo bruto da negociação individual auditado contra compras da mesma corretora'};
+ });
  const recognized=sales.filter(x=>x.recognized&&Number.isFinite(x.profit));
  const excluded=sales.filter(x=>!x.recognized||!Number.isFinite(x.profit));
  const payouts=E.dividendRows(state,owner).filter(x=>x.date>=base.from&&x.date<=today);
