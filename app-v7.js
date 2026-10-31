@@ -183,6 +183,13 @@ function reconciliationCard(pendenciesOnly=false){
   html+='<button class="mt7-btn secondary" data-nav="needs">Ver operações pendentes</button>';
  }
  let out=card(html);
+ const historical=S.spouseHistoricalPosition;
+ if(historical?.rows?.length&&!S.spousePositionSnapshot?.rows?.length){
+  out+=card(titlebar('Posição histórica da Jessica · já recebida')+
+   '<p><b>'+esc(E.dateBR(historical.date))+'</b>: '+historical.rows.length+
+   ' ativos, com <b>'+money(historical.totals?.all||0)+'</b> no valor da época. Os dados foram recuperados do relatório consolidado da B3 e estão armazenados na sua conta.</p>'+
+   '<p>Esse montante é <b>histórico</b> e não é usado como valor de mercado em 2026. Não é necessário reenviar a posição de 2024.</p>');
+ }
  if(!pendenciesOnly&&(ui.period==='all'||ui.period==='5y')){
   const years=S.reconciliation.annualIncome||[];
   const y24=years.find(x=>x.year===2024);
