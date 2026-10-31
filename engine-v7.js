@@ -123,13 +123,21 @@ function portfolio(state,owner='family'){
   const snapshot=p==='spouse'?state.spousePositionSnapshot:state.positionSnapshot;
   const fromPosition=makeSnapshotHoldings(snapshot,p);
   const rows=fromPosition||makeHistoricalHoldings(led,p);
-  rows.forEach(x=>holdings.push(x));
+  rows.forEach(x=>{
+   if(x.origin==='position'&&x.group!=='Tesouro'){
+    const q=state.quotes?.[x.code],age=Date.now()-Date.parse(q?.at||'');
+    if(q&&/brapi/i.test(String(q.provider||''))&&Number.isFinite(+q.price)&&+q.price>0&&Number.isFinite(age)&&age>=0&&age<=4*86400000){
+      x.snapshotValue=x.value;x.value=Math.round(x.qty*(+q.price)*100)/100;x.unit=+q.price;x.origin='quote';x.quoteDate=q.at;
+    }
+   }
+   holdings.push(x);
+  });
   byPerson[p]={total:rows.reduce((n,x)=>n+x.value,0),count:rows.length,source:fromPosition?'position':'estimated',
     date:fromPosition?snapshot.date:null,unmatched:led.problems.filter(x=>x.owner===p).length};
  }
  holdings.sort((a,b)=>b.value-a.value);
  const total=holdings.reduce((n,x)=>n+x.value,0);
- const market=holdings.filter(x=>x.origin==='position').reduce((n,x)=>n+x.value,0);
+ const market=holdings.filter(x=>x.origin==='position'||x.origin==='quote').reduce((n,x)=>n+x.value,0);
  const estimated=total-market;
  const classes={};for(const h of holdings)classes[h.group]=(classes[h.group]||0)+h.value;
  return{owner,holdings,total,market,estimated,byPerson,classes,valuation:market>0&&estimated>0?'mixed':estimated>0?'historical':'position',
@@ -150,7 +158,7 @@ function gains(state,owner='family',period='all',today=isoNow()){
  const dividends=payouts.reduce((n,x)=>n+x.amount,0);
  let openGain=0,matched=0,missing=0;
  for(const h of port.holdings){
-  if(h.origin!=='position'){missing++;continue;}
+  if(h.origin!=='position'&&h.origin!=='quote'){missing++;continue;}
   const basis=led.stocks.get(h.owner+'|'+codeOf(h.code));
   const tolerance=Math.max(.00001,.002*h.qty);
   if(!basis||basis.qty<=0||Math.abs(basis.qty-h.qty)>tolerance){missing++;continue;}
