@@ -8,7 +8,8 @@ const NAV=[['home','⌂','Início'],['portfolio','▦','Carteira'],['result','�
 const money=E.money,fmt=E.fmt;
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const round=v=>Math.round((Number(v)||0)*100)/100;
-const mobileChart=()=>!!root.matchMedia?.('(max-width:600px)').matches;
+const mobileChart=()=>!!root.matchMedia?.('(max-width:790px)').matches;
+const chartMinWidth=()=>Math.max(255,Math.min(640,(Number(root.innerWidth)||390)-66));
 const el=id=>document.getElementById(id);
 const me=o=>String(S.displayNames?.[o]||({me:'Samuel',spouse:'Jessica',family:'Todos'}[o])||o);
 const today=()=>E.isoNow();
@@ -83,7 +84,7 @@ function empty(msg){return '<div class="m8-empty"><span>◇</span><p>'+escape(ms
 function barChart(list,mode='month',onlyDiv=false){
  const data=mode==='year'?Object.values(list.reduce((a,r)=>{const k=r.date.slice(0,4);if(!a[k])a[k]={date:k,sales:0,dividends:0};a[k].sales+=r.sales;a[k].dividends+=r.dividends;return a;},{})):list;
  if(!data.length)return empty('Sem vendas ou proventos neste intervalo.');
- const w=mobileChart()?Math.max(298,data.length*57):Math.max(670,data.length*49),h=250,x0=40,baseline=135;
+ const w=mobileChart()?Math.max(chartMinWidth(),data.length*57):Math.max(670,data.length*49),h=250,x0=40,baseline=135;
  const peak=Math.max(1,...data.flatMap(v=>[Math.abs(v.sales),Math.abs(v.dividends)])),factor=105/peak;
  const cols=data.map((r,i)=>{const x=x0+(i+.5)*(w-80)/data.length,sv=onlyDiv?0:r.sales,dv=r.dividends;
   const a=Math.abs(sv)*factor,b=Math.abs(dv)*factor;
@@ -119,7 +120,7 @@ function trendPositions(){
 }
 function lineChart(points,format='money'){
  if(points.length<2)return empty('Não há pelo menos duas posições históricas comparáveis neste período. Importe novas posições B3 para formar esta curva, sem estimar dados.');
- const w=mobileChart()?Math.max(298,points.length*70):Math.max(640,points.length*38),h=232,pad=31,vals=points.map(x=>x.value),min=Math.min(...vals),max=Math.max(...vals),span=Math.max(1,max-min),
+ const w=mobileChart()?Math.max(chartMinWidth(),points.length*70):Math.max(640,points.length*38),h=232,pad=31,vals=points.map(x=>x.value),min=Math.min(...vals),max=Math.max(...vals),span=Math.max(1,max-min),
  x=i=>pad+i*(w-2*pad)/(points.length-1),y=v=>h-pad-(v-min)*(h-2*pad)/span;
  const path=points.map((r,i)=>(i?'L':'M')+x(i).toFixed(1)+' '+y(r.value).toFixed(1)).join(' ');
  const circles=points.map((r,i)=>'<circle cx="'+x(i)+'" cy="'+y(r.value)+'" r="3.7" fill="#4b77ed" stroke="#fff" stroke-width="1.5"><title>'+escape(r.date)+' · '+(format==='money'?money(r.value):r.value.toFixed(2)+'%')+'</title></circle>').join('');
@@ -157,7 +158,7 @@ function confirmedWealthData(){
 function barsConfirmedWealth(){
  const data=confirmedWealthData();
  if(!data.length)return empty('Não existe posição B3 com valores e custos disponíveis no período. Uma série patrimonial mensal exige posições importadas de outros meses.');
- const values=data, w=mobileChart()?Math.max(298,values.length*95):Math.max(520,values.length*130),h=246,base=185;
+ const values=data, w=mobileChart()?Math.max(chartMinWidth(),values.length*95):Math.max(520,values.length*130),h=246,base=185;
  const max=Math.max(1,...values.map(r=>Math.abs(r.invested)+Math.max(0,r.profit)+r.unknown)),scale=142/max;
  const cols=values.map((v,i)=>{
   const x=36+(i+.5)*(w-72)/values.length,ci=Math.max(0,v.invested*scale),gain=Math.abs(v.profit)*scale,unk=Math.max(0,v.unknown*scale);
@@ -269,7 +270,7 @@ function compareTrend(parts,from,to){
  const byOwner=parts.map(p=>monthly(p.sales,p.div,from,to));
  const data=byOwner[0].map((r,i)=>({date:r.date,a:r.sales+r.dividends,b:(byOwner[1][i]?.sales||0)+(byOwner[1][i]?.dividends||0)}));
  if(!data.length||!data.some(r=>Math.abs(r.a)+Math.abs(r.b)>.000001))return '';
- const visible=data.slice(-24),w=mobileChart()?Math.max(298,visible.length*57):Math.max(700,visible.length*46),h=245,baseline=135;
+ const visible=data.slice(-24),w=mobileChart()?Math.max(chartMinWidth(),visible.length*57):Math.max(700,visible.length*46),h=245,baseline=135;
  const max=Math.max(1,...visible.flatMap(p=>[Math.abs(p.a),Math.abs(p.b)])),scale=95/max;
  const rects=visible.map((p,i)=>{
   const x=38+(i+.5)*(w-80)/visible.length;
@@ -416,7 +417,7 @@ function render(){
  catch(err){console.error('Erro ao renderizar a tela',err);html=box('<h2>Não foi possível abrir esta tela</h2><p>'+escape(err.message||'Falha inesperada')+'</p>'+action('Voltar ao início','home',true));}
  target.innerHTML=layout(html);
  if(mobileChart())for(const plot of target.querySelectorAll('.m8-plot')){
-  if(plot.scrollWidth>plot.clientWidth+8){plot.scrollLeft=plot.scrollWidth-plot.clientWidth;plot.classList.add('m8-scrollchart');plot.tabIndex=0;plot.setAttribute('aria-label','Gráfico rolável. Deslize horizontalmente para ver outros períodos.');}
+  if(plot.scrollWidth>plot.clientWidth+8){plot.scrollLeft=plot.scrollWidth-plot.clientWidth;plot.classList.add('m8-scrollchart');plot.tabIndex=0;plot.setAttribute('aria-label','Gráfico rolável. Deslize horizontalmente para ver outros períodos.');plot.insertAdjacentHTML('afterend','<p class="m8-chart-swipe" aria-hidden="true">← Deslize para ver períodos anteriores</p>');}
  }
 }
 function navigate(page){
