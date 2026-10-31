@@ -139,14 +139,24 @@ function evolutionChart(owner){
 }
 function dashboardViz(p,g){
  const total=p.total||0,items=Object.entries(p.classes||{}).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);
- const colors=['#298bc0','#31b79b','#a1d3ed','#f3a95b','#8e81cc','#d36c80'];
+ const colors=['#2589e0','#13ba9b','#8c68e8','#efa343','#ee6e8d','#5486aa'];
  let offset=0;
- const conic=items.map(([key,value],i)=>{const start=offset;offset+=value/Math.max(1,total)*100;return colors[i%colors.length]+' '+start.toFixed(2)+'% '+offset.toFixed(2)+'%';}).join(',');
+ const conic=items.length?items.map(([key,value],i)=>{const start=offset;offset+=value/Math.max(1,total)*100;return colors[i%colors.length]+' '+start.toFixed(2)+'% '+offset.toFixed(2)+'%';}).join(','):'#e5e9f2 0% 100%';
  const donut='<div class="mt7-donutwrap"><div class="mt7-donut" style="background:conic-gradient('+conic+')"><div class="mt7-donutcenter"><b>'+money(total)+'</b><small>Patrimônio</small></div></div><div class="mt7-donutlegend">'+items.map(([k,v],i)=>'<div><i style="background:'+colors[i%colors.length]+'"></i><span>'+esc(k)+'</span><strong>'+((100*v)/Math.max(1,total)).toFixed(1).replace('.',',')+'%</strong></div>').join('')+'</div></div>';
- const months=(g.monthly||[]).slice(-12),peak=Math.max(1,...months.map(x=>Math.abs(x.realized+x.dividends)));
- const bars='<div class="mt7-dashbars">'+months.map(m=>{const val=m.realized+m.dividends;return '<div class="mt7-dashbarcol" title="'+esc(m.month)+' · '+money(val)+'"><div class="mt7-dashbar" style="height:'+Math.max(2,Math.abs(val)/peak*130).toFixed(1)+'px;background:'+(val<0?'#d36c80':'#2db585')+'"></div><small>'+esc(m.month.slice(5))+'</small></div>';}).join('')+'</div>';
- const cards='<div class="mt7-kpi-grid">'+stat('Patrimônio atual',money(total),p.holdings.length+' posições')+stat('Lucro em vendas',money(g.realized),'Período selecionado')+stat('Proventos',money(g.dividends),'Período selecionado')+stat('Resultado realizado',money(g.realized+g.dividends),'Sem valorização de posições')+'</div>';
- return '<section class="mt7-dash-header">'+cards+'<div class="mt7-dashboard-grid">'+card(titlebar('Evolução mensal do resultado')+bars+'<p class="mt7-footnote">Barras mostram vendas e proventos; não são valorização total do patrimônio.</p>')+card(titlebar('Distribuição por classe')+donut)+'</div></section>';
+ const months=(g.monthly||[]).slice(-12),w=760,h=285,left=56,right=24,top=26,bottom=40,plot=h-top-bottom;
+ const ymax=Math.max(1,...months.flatMap(m=>[Math.abs(m.realized),Math.abs(m.dividends),Math.abs(m.realized+m.dividends)]));
+ const baseline=top+plot*.64,scale=Math.min((baseline-top-8)/ymax,(h-bottom-baseline-8)/Math.max(1,...months.map(m=>Math.abs(Math.min(0,m.realized)))));
+ const xpos=i=>left+(i+.5)*(w-left-right)/Math.max(1,months.length);
+ let acc=0;const series=months.map((m,i)=>{acc+=m.realized+m.dividends;return {x:xpos(i),v:acc,month:m.month};});
+ const minCum=Math.min(0,...series.map(x=>x.v)),maxCum=Math.max(0,...series.map(x=>x.v)),cumScale=plot/Math.max(1,maxCum-minCum),yCum=v=>top+(maxCum-v)*cumScale;
+ const grid=[0,1,2,3,4].map(i=>{const y=top+i*plot/4;return '<line x1="'+left+'" y1="'+y+'" x2="'+(w-right)+'" y2="'+y+'" stroke="#e9edf6" stroke-dasharray="3 5"/>';}).join('');
+ const bars=months.map((m,i)=>{const x=xpos(i),a=m.realized,b=m.dividends;const ra=Math.abs(a)*scale,rb=Math.max(0,b)*scale;return '<rect x="'+(x-15)+'" y="'+(a>=0?baseline-ra:baseline)+'" width="12" height="'+Math.max(.7,ra)+'" rx="3" fill="'+(a<0?'#e46b83':'#18ad93')+'"><title>'+esc(m.month)+' · Vendas: '+money(a)+'</title></rect><rect x="'+(x+3)+'" y="'+(baseline-rb)+'" width="12" height="'+Math.max(.7,rb)+'" rx="3" fill="#4a91ed"><title>'+esc(m.month)+' · Proventos: '+money(b)+'</title></rect><text x="'+x+'" y="'+(h-14)+'" text-anchor="middle" font-size="11" fill="#7f8ca4">'+esc(m.month.slice(5))+'</text>';}).join('');
+ const path=series.map((p,i)=>(i?'L':'M')+p.x.toFixed(1)+' '+yCum(p.v).toFixed(1)).join(' ');
+ const dots=series.map(p=>'<circle cx="'+p.x+'" cy="'+yCum(p.v)+'" r="3.6" fill="#8b65e9" stroke="#fff" stroke-width="1.5"><title>'+esc(p.month)+' · Acumulado '+money(p.v)+'</title></circle>').join('');
+ const chart=months.length?'<div class="mt7-plot"><svg viewBox="0 0 '+w+' '+h+'" role="img" aria-label="Gráfico mensal de ganhos e perdas, proventos e resultado acumulado">'+grid+'<line x1="'+left+'" y1="'+baseline+'" x2="'+(w-right)+'" y2="'+baseline+'" stroke="#b8c3d2"/>'+bars+'<path d="'+path+'" stroke="#8b65e9" stroke-width="3" fill="none" stroke-linejoin="round" stroke-linecap="round"/>'+dots+'</svg></div>':'<div class="mt7-chartempty">Não há operações neste intervalo.</div>';
+ const legend='<div class="mt7-plotlegend"><span><i style="background:#18ad93"></i>Lucro nas vendas</span><span><i style="background:#e46b83"></i>Prejuízo</span><span><i style="background:#4a91ed"></i>Proventos</span><span><i style="background:#8b65e9"></i>Acumulado*</span></div>';
+ const cards='<div class="mt7-kpi-grid">'+stat('Patrimônio atual',money(total),p.holdings.length+' posições')+stat('Lucro nas vendas',money(g.realized),'Período selecionado')+stat('Proventos',money(g.dividends),'Período selecionado')+stat('Resultado realizado',money(g.realized+g.dividends),'Vendas + proventos')+'</div>';
+ return '<section class="mt7-dash-header">'+cards+'<div class="mt7-dashboard-grid">'+card(titlebar('Desempenho mensal · últimos 12 meses')+legend+chart+'<p class="mt7-footnote">*Linha acumulada a partir do primeiro mês exibido. Não inclui valorização das posições ainda abertas.</p>')+card(titlebar('Composição da carteira')+donut)+'</div></section>';
 }
 function home(){
  const p=E.portfolio(S,ui.owner),g=E.gains(S,ui.owner,ui.period);
