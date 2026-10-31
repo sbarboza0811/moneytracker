@@ -314,7 +314,7 @@ function pendingSalesDetails(){
    '<article class="mt7-check warning"><h3>'+esc(x.code)+' · '+esc(E.dateBR(x.date))+
    '</h3><p>'+fmt(x.qty)+' unidades · Valor vendido '+money(x.gross)+
    (x.count>1?' · '+x.count+' negócios':'')+'</p>'+
-   '<div class="action"><b>Motivo</b><p>'+esc([...x.reasons].join('; '))+
+   '<div class="action"><b>Motivo</b><p>'+esc(S.reconciliation?.pendingDetails?.find(d=>d.date===x.date&&d.code===x.code)?.reason||[...x.reasons].join('; '))+
    '</p></div></article>'
   ).join('')+'</div>');
 }
