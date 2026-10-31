@@ -165,7 +165,7 @@ function portfolio(){
 
 function reconciliationCard(pendenciesOnly=false){
  if(ui.owner==='me'||!S.reconciliation?.sales?.length||!E.reconciliationReport)return '';
- const a=E.reconciliationReport(S,ui.owner,pendenciesOnly?'all':ui.period);
+ const a=E.reconciliationReport(S,'spouse',pendenciesOnly?'all':ui.period);
  const rows=a.items.filter(x=>!x.matched||x.status!=='CALCULAVEL_BRUTO');
  const complete=a.verified;
  const auctionCount=a.items.filter(x=>x.event==='Leilão de fração de bonificação'&&x.matched).length;
@@ -285,7 +285,11 @@ function imported(){
 function pendingSalesDetails(){
  if(ui.owner==='spouse')return '';
  const stock=E.ledger(S,'me').sales,treasury=E.treasuryLedger(S,'me').sales;
- const misses=[...stock,...treasury].filter(x=>!x.recognized);
+ const audited=E.reconciliationReport?E.reconciliationReport(S,'me','all'):null;
+ const reconciled=new Set((audited?.items||[]).filter(x=>x.matched&&x.status==='CALCULAVEL_BRUTO')
+  .map(x=>x.owner+'|'+x.date+'|'+x.code));
+ const misses=[...stock,...treasury].filter(x=>!x.recognized&&
+  !reconciled.has(x.owner+'|'+x.date+'|'+x.code));
  if(!misses.length)return card(titlebar('Minhas vendas históricas')+
   '<p>Todos os custos de venda estão conciliados para a carteira selecionada.</p>');
  const grouped=new Map();
