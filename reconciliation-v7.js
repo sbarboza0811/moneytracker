@@ -87,7 +87,7 @@ E.gains=function(state,owner='family',period='all',today=E.isoNow()){
   excludedGross:excluded.reduce((total,x)=>total+x.gross,0),
   payments:payouts.length,monthly:[...monthly.values()].sort((x,y)=>x.month.localeCompare(y.month)),
   complete:base.complete&&excluded.length===0&&a.unmatched===0&&a.provisional===0&&a.incomplete===0,
-  partial:true,warning:parts.join(' '),
+  partial:!(base.complete&&excluded.length===0&&a.unmatched===0&&a.provisional===0&&a.incomplete===0),warning:parts.join(' '),
   reconciliationVerified:a.verified,reconciliationProvisional:a.provisional,
   reconciliationIncomplete:a.incomplete,reconciliationUnmatched:a.unmatched};
 };
