@@ -96,6 +96,8 @@ E.gaps=function(state,owner='family',today=E.isoNow()){
    }).map(h=>{
     const b=led.stocks.get('spouse|'+E.codeOf(h.code));
     const gap=Math.round((h.qty-(b?.qty||0))*100000)/100000;
+    if(h.code==='BTHF11'&&state?.reconciliation?.conversionEvidence?.BCFF11_BTHF11)
+     return 'BTHF11: '+gap+' cotas recebidas na conversão de BCFF11 em 18/12/2024; quantidade explicada, custo fiscal da conversão pendente';
     return h.code+': posição '+h.qty+', histórico '+Math.round((b?.qty||0)*100000)/100000+
      (gap?' (diferença '+gap+')':'')+'. Custo de origem ainda não demonstrado';
    });
