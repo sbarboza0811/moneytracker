@@ -50,7 +50,7 @@ function sourceSplit(p){
 function profitCards(g,p){
  const openLabel=ui.period==='all'?(g.openGain===null?'—':money(g.openGain)):'Não apurado';
  return '<div class="mt7-cards3">'+
- stat('Lucro nas vendas',money(g.realized),g.sales+' vendas conciliadas','profit')+
+ stat('Lucro nas vendas',money(g.realized),g.sales+' vendas com custo comprovado','profit')+
  stat('Proventos recebidos',money(g.dividends),g.payments+' pagamentos','income')+
  stat('Ganho em aberto',openLabel,ui.period==='all'?g.matched+' posições com custo conciliado':'Requer preços históricos','profit')+
  stat('Capital investido (posição)',money(p.total),p.valuation==='mixed'?'B3 + custo histórico':'Total da carteira','portfolio')+
@@ -62,8 +62,8 @@ function periodFilters(){
  '<button type="button" data-period="'+v+'" aria-pressed="'+String(ui.period===v)+'" class="'+(ui.period===v?'active':'')+'">'+label+'</button>').join('')+'</div>';
 }
 function profitSummary(g){
- const ready=g.complete,cl=ready?'':'warn',label=ready?'Conciliado':'Parcial';
- return card(titlebar('Lucro apurado · '+E.periodLabel[ui.period],'profit','Detalhar')+
+ const ready=g.complete,cl=ready?'':'warn',label=ready?'Conciliado':'Incompleto';
+ return card(titlebar('Lucro identificado · '+E.periodLabel[ui.period],'profit','Detalhar')+
  periodFilters()+
  '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px"><div class="mt7-mainnumber">'+money(g.profit)+'</div><span class="mt7-pill '+cl+'">'+label+'</span></div>'+
  '<p class="mt7-label">Ganho em vendas e dividendos no período'+(ui.period==='all'?', mais ganho em aberto de posições conciliadas':'')+'.</p>'+
@@ -162,18 +162,18 @@ function portfolio(){
 function profit(){
  const p=E.portfolio(S,ui.owner),g=E.gains(S,ui.owner,ui.period);
  return profitSummary(g)+
- '<div class="mt7-cards3">'+stat('Lucro nas vendas',money(g.realized),g.sales+' vendas')+
- stat('Dividendos e rendimentos',money(g.dividends),g.payments+' créditos','income')+
- stat('Valorização em aberto',ui.period==='all'?(g.openGain===null?'—':money(g.openGain)):'Não apurada',ui.period==='all'?g.matched+' de '+g.positions+' posições':'Faltam cotações históricas')+
- stat('Capital investido · posição',money(g.capitalInvested),p.valuation==='mixed'?'Consolidado indicativo':'Total atual das posições','portfolio')+'</div>'+
+ '<div class="mt7-cards3">'+stat('Lucro nas vendas',money(g.realized),g.sales+' vendas com custo comprovado')+
+ stat('Proventos identificados',money(g.dividends),g.payments+' créditos','income')+
+ stat('Valorização em aberto',ui.period==='all'?(g.openGain===null?'—':money(g.openGain)):'Não apurada',ui.period==='all'?g.matched+' de '+g.positions+' posições':'Faltam cotações do início do período')+
+ stat('Capital investido · posição',money(g.capitalInvested),p.valuation==='mixed'?'Consolidado indicativo':'Total atual das posições','portfolio')+stat('Vendas não conciliadas',String(g.excludedSales),'Fora do lucro exibido','needs')+'</div>'+
  card(titlebar('Gráfico de lucro ao longo do período')+monthlyChart(g))+
  card(titlebar('Evolução do patrimônio')+evolutionChart(ui.owner))+
  card(titlebar('Como o lucro é calculado')+
- '<p><b>Vendas:</b> valor de venda menos custo médio das unidades vendidas. Ganhos de investimentos já encerrados continuam acumulados.</p>'+
+ '<p><b>Vendas:</b> valor vendido menos custo médio comprovado das unidades. Vendas sem custo suficiente ficam <b>fora</b> do lucro. Resultados de investimentos já encerrados continuam no histórico.</p>'+
  '<p><b>Proventos:</b> créditos identificados como dividendos, juros sobre capital próprio e rendimentos na B3.</p>'+
- '<p><b>Ganho em aberto:</b> diferença entre posição B3 e custo histórico conciliado; para períodos curtos, não é somado sem preços históricos.</p>'+
+ '<p><b>Ganho em aberto:</b> valor da posição B3 menos custo conciliado. No Tesouro, valor atualizado menos Valor Aplicado representa ganho <b>bruto</b>. Em períodos curtos, não somamos variação sem preços históricos.</p>'+
  '<p><b>Capital investido:</b> é o total das posições atuais, como solicitado; não é a soma de todos os aportes desde o início.</p>'+
- '<p class="mt7-footnote">Sem configuração inicial. Quando compras, eventos societários ou posições históricas faltarem, os resultados permanecem identificados como parciais.</p>')+
+ '<p class="mt7-footnote">Resultado bruto antes de possíveis taxas e impostos. Não é lucro líquido tributário. Sem configuração inicial; informações incompletas são sempre indicadas.</p>')+
  '<div class="mt7-actionrow"><button class="mt7-btn secondary" data-nav="needs">Ver pendências</button><button class="mt7-btn ghost" data-nav="income">Proventos</button></div>';
 }
 function income(){
