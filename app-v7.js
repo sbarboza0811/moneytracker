@@ -184,9 +184,17 @@ function reconciliationCard(pendenciesOnly=false){
  }
  let out=card(html);
  if(!pendenciesOnly&&(ui.period==='all'||ui.period==='5y')){
-  const annual=S.reconciliation.annualIncome?.find(x=>x.year===2024);
-  if(annual)out+=card(titlebar('Rendimentos de 2024 · Jessica')+
-  '<p>A B3 informou <b>'+money(annual.amount)+'</b> em 2024. É uma referência anual, <b>não somada ao lucro filtrado</b>, até que existam datas de pagamento verificadas, evitando duplicação.</p>');
+  const years=S.reconciliation.annualIncome||[];
+  const y24=years.find(x=>x.year===2024);
+  if(y24&&y24.status==='imported_full'){
+   out+=card(titlebar('Rendimentos de 2024 · Jessica')+
+    '<p><b>'+money(y24.amount)+'</b> comprovados em 144 pagamentos da Rico, iguais ao total anual da B3. Já fazem parte dos proventos do histórico, nas datas em que foram pagos. <b>Não são adicionados novamente</b> como total anual.</p>');
+  }
+  const y23=years.find(x=>x.year===2023);
+  if(y23){
+   out+=card(titlebar('Rendimentos de 2023 · Jessica')+
+    '<p><b>'+money(y23.importedAmount)+'</b> confirmados em 113 pagamentos da Rico e incluídos no histórico. A B3 informa '+money(y23.amount)+'; diferença de <b>'+money(y23.missingAmount)+'</b> ainda não localizada, portanto não inventada.</p>');
+  }
  }
  return out;
 }
