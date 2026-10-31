@@ -48,7 +48,7 @@ function sourceSplit(p){
  }).join('')+'</div>';
 }
 function profitCards(g,p){
- const openLabel=ui.period==='all'?(g.openGain===null?'Não apurado':money(g.openGain)):'Não apurado';
+ const openLabel=ui.period==='all'?(g.openGain===null?'Sem base de custo':money(g.openGain)):'Não incluída';
  return '<div class="mt7-cards3">'+
  stat('Lucro nas vendas · apurado',money(g.realized),g.sales+' vendas com custo verificado','profit')+
  stat('Proventos identificados',money(g.dividends),g.payments+' pagamentos','income')+
