@@ -14,7 +14,7 @@ function getEntries(state){
  const inputs=[...(Array.isArray(r.sales)?r.sales.map(x=>({...x,owner:'spouse'})):[]),
   ...(Array.isArray(r.meSales)?r.meSales.map(x=>({...x,owner:'me'})):[])];
  return inputs.filter(x=>x&&/^\d{4}-\d{2}-\d{2}$/.test(String(x.date||''))&&
- (/^[A-Z0-9]{4,12}$/.test(String(x.code||''))||/^TESOURO (SELIC|IPCA|PREFIXADO)/.test(String(x.code||'')))&&validStatus(x.status));
+ (/^[A-Z0-9]{4,12}$/.test(String(x.code||''))||/^TESOURO (SELIC|IPCA|PREFIXADO)/i.test(String(x.code||'')))&&validStatus(x.status));
 }
 function saleKey(x){return x.owner+'|'+x.date+'|'+E.codeOf(x.code);}
 function extraOpenBasis(state,owner){
