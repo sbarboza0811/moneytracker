@@ -257,9 +257,52 @@ function profitDetails(){
  card(titlebar('Vendas agrupadas por classe — ações, FIIs, ETFs e Tesouro')+'<p class="mt7-footnote">Agrupado por tipo de investimento. Toque na classe para expandir os ativos e depois toque no ativo para ver as operações.</p>')+
  (classRows||card('<p>Não houve vendas neste período.</p>'));
 }
+function wealthCharts(){
+ const grain=ui.chartGrain||'month',start=ui.chartStart||'',end=ui.chartEnd||'';
+ const monthly=E.gains(S,ui.owner,'all').monthly,groups=new Map();
+ for(const item of monthly){
+  const key=grain==='year'?item.month.slice(0,4):item.month;
+  if(start&&item.month<start)continue;
+  if(end&&item.month>end)continue;
+  const v=groups.get(key)||{realized:0,dividends:0};
+  v.realized+=item.realized;v.dividends+=item.dividends;groups.set(key,v);
+ }
+ const entries=[...groups].sort((a,b)=>a[0].localeCompare(b[0]));
+ const totals=entries.reduce((v,x)=>({realized:v.realized+x[1].realized,dividends:v.dividends+x[1].dividends}),{realized:0,dividends:0});
+ const visible=entries.slice(grain==='year'?-25:-36);
+ const peak=Math.max(1,...visible.flatMap(x=>[Math.abs(x[1].realized),Math.abs(x[1].dividends)]));
+ const bars=visible.map(([period,val])=>{
+  const h1=Math.max(1,Math.abs(val.realized)/peak*110),h2=Math.max(1,val.dividends/peak*110);
+  return '<div style="min-width:31px;flex:1;text-align:center" title="'+esc(period)+' · Vendas '+money(val.realized)+' · Proventos '+money(val.dividends)+'"><div style="height:125px;display:flex;gap:3px;align-items:flex-end;justify-content:center"><div style="width:11px;height:'+h1.toFixed(1)+'px;background:'+(val.realized<0?'#bc5353':'#128464')+'"></div><div style="width:11px;height:'+h2.toFixed(1)+'px;background:#528ec2"></div></div><small style="font-size:10px">'+esc(grain==='year'?period:period.slice(5))+'</small></div>';
+ }).join('');
+ const port=E.portfolio(S,ui.owner),ledger=E.ledger(S,ui.owner),bases=S.reconciliation?.positionBasis||{};
+ let cost=0,unverified=0,count=0;
+ for(const h of port.holdings){
+  if(!(h.qty>0)||!(h.value>0))continue;
+  if(h.group==='Tesouro'&&h.applied>0){cost+=h.applied;continue;}
+  const p=ledger.stocks.get(h.owner+'|'+E.codeOf(h.code));
+  if(p&&!p.uncertain&&p.qty>0&&Math.abs(p.qty-h.qty)<=Math.max(.00001,.002*h.qty)){cost+=p.cost;continue;}
+  const b=bases[E.codeOf(h.code)];
+  if(b&&b.owner===h.owner&&Math.abs(Number(b.qty)-h.qty)<.000001&&Number(b.totalBasis)>0){cost+=Number(b.totalBasis);continue;}
+  unverified+=h.value;count++;
+ }
+ const gain=port.total-cost-unverified;
+ return card(titlebar('Crescimento e resultado por período')+
+ '<div class="mt7-filter"><button data-chart-grain="month" class="'+(grain==='month'?'active':'')+'">Mensal</button><button data-chart-grain="year" class="'+(grain==='year'?'active':'')+'">Anual</button></div>'+
+ '<div style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0"><label>De <input type="month" data-chart-date="start" class="mt7-input" value="'+esc(start)+'"></label><label>Até <input type="month" data-chart-date="end" class="mt7-input" value="'+esc(end)+'"></label><button class="mt7-btn secondary" data-chart-clear="1">Limpar datas</button></div>'+
+ '<p><b>Vendas:</b> '+money(totals.realized)+' · <b>Proventos:</b> '+money(totals.dividends)+' · <b>Realizado:</b> '+money(totals.realized+totals.dividends)+'</p>'+
+ '<p class="mt7-footnote">Verde: lucro nas vendas · Vermelho: prejuízo · Azul: proventos. Barras representam cada período, sem somar a valorização das posições abertas.</p>'+
+ (bars?'<div style="display:flex;gap:3px;overflow-x:auto;padding:12px 4px;align-items:end">'+bars+'</div>':'<p>Não há operações no intervalo selecionado.</p>'))+
+ card(titlebar('Decomposição do patrimônio atual')+
+ '<div class="mt7-cards3">'+stat('Patrimônio atual',money(port.total),'Valor das posições')+
+ stat('Custo de aquisição atual',money(cost),'Custo das posições comprovadas')+
+ stat('Valorização em aberto',money(gain),'Diferença entre mercado e custo identificado')+'</div>'+
+ (unverified?'<p>Sem custo demonstrado: '+money(unverified)+' em '+count+' posições; não classificado como lucro ou custo.</p>':'')+
+ '<p class="mt7-footnote">O custo de aquisição não é o mesmo que dinheiro novo aportado. Para separar aportes externos, reinvestimentos e saques são necessários fluxos de caixa de contas e corretoras. Não tratamos compras como aporte novo automaticamente.</p>');
+}
 function profit(){
  const p=E.portfolio(S,ui.owner),g=E.gains(S,ui.owner,ui.period);
- return profitSummary(g)+profitDetails()+reconciliationCard()+
+ return profitSummary(g)+wealthCharts()+profitDetails()+reconciliationCard()+
  '<div class="mt7-cards3">'+stat('Lucro nas vendas',money(g.realized),g.sales+' vendas com custo comprovado')+
  stat('Proventos identificados',money(g.dividends),g.payments+' créditos','income')+
  stat('Valorização em aberto',ui.period==='all'?(g.openGain===null?'—':money(g.openGain)):'Não incluída',ui.period==='all'?g.matched+' de '+g.positions+' posições':'Sem preços históricos comparáveis')+
@@ -478,6 +521,8 @@ function listen(){
   const t=event.target,nav=t.closest('[data-nav]');
   if(nav){go(nav.dataset.nav);return;}
   const owner=t.closest('[data-owner]');if(owner){ui.owner=owner.dataset.owner;invalidateAnalysis();ui.category='all';ui.search='';if(ui.owner!=='family')ui.importOwner=ui.owner;render();return;}
+  const grain=t.closest('[data-chart-grain]');if(grain){ui.chartGrain=grain.dataset.chartGrain;render();return;}
+  if(t.closest('[data-chart-clear]')){ui.chartStart='';ui.chartEnd='';render();return;}
   const period=t.closest('[data-period]');if(period){ui.period=period.dataset.period;render();return;}
   const group=t.closest('[data-category]');if(group){ui.category=group.dataset.category;render();return;}
   const hist=t.closest('[data-history-kind]');if(hist){ui.historyKind=hist.dataset.historyKind;render();return;}
@@ -498,6 +543,7 @@ function listen(){
  });
  document.addEventListener('change',async event=>{
   const target=event.target;
+  if(target.dataset?.chartDate){if(target.dataset.chartDate==='start')ui.chartStart=target.value;else ui.chartEnd=target.value;render();return;}
   if(target.id==='mt7-import-owner'){ui.importOwner=target.value==='spouse'?'spouse':'me';return;}
   if(target.id==='mt7-file'){const files=Array.from(target.files||[]);await importFiles(files);return;}
   if(target.id==='mt7-restore-file'){
