@@ -266,6 +266,36 @@ function v4MonthlyBars(label,values,year,kind){
  '<small>'+String(i+1).padStart(2,'0')+'</small></div>').join('')+'</div>'+
  '<div class="v4chartcaption">'+(kind==='gain'?'Estimada por custo médio; perdas em vermelho.':'Recebimentos identificados na Movimentação B3.')+'</div>';
 }
+
+function v4CumulativeChart(){
+ const monthly=new Map(),income=v4IncomeRows(),sales=v3realized();
+ for(const row of income)monthly.set(row.month,(monthly.get(row.month)||0)+row.value);
+ for(const [month,value] of Object.entries(sales.monthly||{}))monthly.set(month,(monthly.get(month)||0)+value);
+ const dates=[...monthly.keys()].sort();
+ if(!dates.length)return '<p class="v4empty">Importe negociações e movimentações para acompanhar resultados históricos.</p>';
+ const first=dates[0],last=dates.at(-1),months=[];
+ let year=Number(first.slice(0,4)),month=Number(first.slice(5)),running=0;
+ const until=Number(last.slice(0,4))*12+Number(last.slice(5));
+ while(year*12+month<=until&&months.length<300){
+  const key=year+'-'+String(month).padStart(2,'0');
+  running+=monthly.get(key)||0;months.push({date:key,total:running});
+  month++;if(month===13){year++;month=1;}
+ }
+ if(months.length<2)return '<p class="v4empty">A evolução começa quando houver resultados em meses diferentes.</p>';
+ const data=months.slice(-30),w=680,ht=185,padX=20,padY=20;
+ const vals=data.map(x=>x.total),min=Math.min(0,...vals),max=Math.max(0,...vals),span=Math.max(1,max-min),yl=v=>ht-padY-((v-min)/span)*(ht-2*padY);
+ const coords=data.map((x,i)=>(padX+(w-2*padX)*i/(data.length-1)).toFixed(1)+','+yl(x.total).toFixed(1)).join(' ');
+ const lastTotal=months.at(-1).total;
+ return '<div class="v4chartvalue">'+money(lastTotal)+'</div>'+
+ '<div class="v4chartcaption">Lucro realizado estimado + proventos registrados, desde o início do histórico.</div>'+
+ '<svg class="v4line" viewBox="0 0 '+w+' '+ht+'" role="img" aria-label="Resultado acumulado de '+h(data[0].date)+' até '+h(data.at(-1).date)+'">'+
+ '<line x1="'+padX+'" x2="'+(w-padX)+'" y1="'+yl(0).toFixed(1)+'" y2="'+yl(0).toFixed(1)+'" stroke="#d3e2d8" stroke-width="1.5"/>'+
+ '<polyline points="'+coords+'" fill="none" stroke="#118565" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>'+
+ '<circle cx="'+(w-padX)+'" cy="'+yl(data.at(-1).total).toFixed(1)+'" r="5.5" fill="#0f8a65" stroke="white" stroke-width="2"/>'+
+ '</svg><div class="v4lineaxis"><span>'+h(data[0].date.slice(5)+'/'+data[0].date.slice(0,4))+'</span><span>'+h(data.at(-1).date.slice(5)+'/'+data.at(-1).date.slice(0,4))+'</span></div>'+
+ '<p class="v2note">Não é a evolução do patrimônio total. Não inclui a valorização dos ativos ainda mantidos e pode ser parcial se faltarem operações ou eventos societários.</p>';
+}
+
 function v4Charts(){
  const years=v4Years(),year=years.includes(ui.chartYear)?ui.chartYear:(years[0]||String(new Date().getFullYear()));
  const income=Array(12).fill(0),realized=Array(12).fill(0),sales=v3realized();
@@ -274,7 +304,7 @@ function v4Charts(){
  return '<section class="v2panel"><div class="v2section"><h2>Gráficos históricos</h2><button data-page="performance">Ver resultados ›</button></div>'+
  '<div class="v4years" role="group" aria-label="Ano dos gráficos">'+years.slice(0,9).map(y=>'<button type="button" data-v4-year="'+y+'" class="'+(year===y?'selected':'')+'">'+y+'</button>').join('')+'</div>'+
  '<div class="v4chartgrid"><div class="v4chartpanel"><h3>Proventos por mês</h3>'+v4MonthlyBars('Proventos',income,year,'income')+'</div>'+
- '<div class="v4chartpanel"><h3>Lucro nas vendas</h3>'+v4MonthlyBars('Ganho realizado',realized,year,'gain')+'</div></div></section>';
+ '<div class="v4chartpanel"><h3>Lucro nas vendas</h3>'+v4MonthlyBars('Ganho realizado',realized,year,'gain')+'</div></div>'+ '<div class="v4cumulative"><h3>Resultado realizado acumulado</h3>'+v4CumulativeChart()+'</div></section>';
 }
 function v4ProfitPanel(D){
  const profit=v3profit(D),real=v3realized(),unreal=v3unrealized(D),divs=D.incTotal;
@@ -645,7 +675,7 @@ async function restoreBackup(file){try{const obj=JSON.parse(await file.text());i
     if(!confirm(`Substituir seus ${S.records.length} registros pelos ${records.length} do backup? Faça um backup antes, se necessário.`))return;
     S={...original(),...obj.data,records,targets:{...TARGET,...obj.data.targets},goal:{...DEFAULT_GOAL,...obj.data.goal}};save();page='home';render();toast('Backup restaurado, sem registros repetidos.');}catch(e){toast('Falha ao restaurar backup: '+e.message,true);}}
 function dispatch(e){
-  const ownerClick=e.target.closest('[data-owner]');if(ownerClick){ui.owner=ownerClick.dataset.owner;ui.portfolioFilter='';ui.search='';render();return;}
+  const ownerClick=e.target.closest('[data-owner]');if(ownerClick){ui.owner=ownerClick.dataset.owner;if(ui.owner!=='family')ui.importOwner=ui.owner;ui.portfolioFilter='';ui.search='';render();return;}
   const deleteFlow=e.target.closest('[data-v3-delete-flow]');
   if(deleteFlow){const id=deleteFlow.dataset.v3DeleteFlow;if(confirm('Excluir este movimento de dinheiro?')){S.cashflows=(S.cashflows||[]).filter(x=>x.id!==id);save();ui.benchmark='';render();toast('Movimento excluído.');}return;}
   const quoteBtn=e.target.closest('[data-v3-fetch-quote]');if(quoteBtn){v3fetchQuote(quoteBtn.dataset.v3FetchQuote);return;}
