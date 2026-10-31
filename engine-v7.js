@@ -436,6 +436,14 @@ async function importXlsx(state,owner,files,xlsx){
    newRecords.push(...proposed.slice(Math.max(0,proposed.length-add)));
    duplicates+=Math.min(count,old);
  }
+ // If a genuine B3 export later includes the ALZR11 2025 split, replace the
+ // documented placeholder instead of counting the same 342 units twice.
+ for(const r of newRecords){
+  if(r.owner!=='spouse'||r.t!=='mov'||dateISO(r.v[1])!=='2025-05-06'||
+    !['DESDOBRO','DESDOBRAMENTO'].includes(norm(r.v[2]))||
+    codeOf(tidy(r.v[3]).split(' - ')[0])!=='ALZR11'||Math.abs(number(r.v[5])-342)>1e-8)continue;
+  next.records=next.records.filter(old=>old.id!=='verified-alzr11-split-2025-05-06');
+ }
  next.records.push(...newRecords);
  let positionsChanged=0;
  if(positionByGroup.size){
