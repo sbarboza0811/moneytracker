@@ -270,6 +270,8 @@ function gains(state,owner='family',period='all',today=isoNow()){
  const dividends=roundMoney(payouts.reduce((n,x)=>n+x.amount,0));
  let openGain=0,matched=0,missing=0,tesouroMatched=0;
  for(const h of port.holdings){
+  // Direitos de subscrição sem valor de mercado não são posições compradas nem lucro em aberto.
+  if(h.value===0&&/^[A-Z]{4}1[23]$/.test(codeOf(h.code)))continue;
   if(h.origin!=='position'&&h.origin!=='quote'){missing++;continue;}
   if(h.group==='Tesouro'){
    // B3 position report contains Valor Aplicado for Tesouro Direto.
