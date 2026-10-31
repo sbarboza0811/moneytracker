@@ -249,6 +249,44 @@ const cats=CATS.filter(c=>D.cats[c.id]>0).sort((a,b)=>D.cats[b.id]-D.cats[a.id])
 let current=0;const slices=cats.map(c=>{const old=current;current+=D.cats[c.id]/D.total*100;return `${c.c} ${old.toFixed(2)}% ${current.toFixed(2)}%`;}).join(',');
 return `<div class="v2donutwrap"><div class="v2donut" style="background:conic-gradient(${slices})"><div class="v2donutinner"><small>Classes</small><b>${cats.length}</b></div></div><div class="v2legend">${cats.map(c=>`<div class="v2legendrow"><span><i class="v2dot" style="background:${c.c}"></i>${h(c.n)}</span><b>${v2pct(D.cats[c.id],D.total)}</b></div>`).join('')}</div></div>`;
 }
+
+function v4IncomeRows(){
+ return groupRecords('mov').filter(r=>norm(r.v[0])==='CREDITO'&&['DIVIDENDO','RENDIMENTO','JUROS SOBRE CAPITAL PROPRIO'].includes(norm(r.v[2]))&&Number.isFinite(num(r.v[7]))).map(r=>({month:dateOf(r).slice(0,7),value:num(r.v[7])}));
+}
+function v4Years(){
+ return [...new Set(groupRecords('mov').concat(groupRecords('trade')).map(r=>dateOf(r).slice(0,4)).filter(y=>/^\d{4}$/.test(y)&&Number(y)>=2000))].sort((a,b)=>b.localeCompare(a));
+}
+function v4MonthlyBars(label,values,year,kind){
+ const max=Math.max(0,...values.map(v=>Math.abs(v))),sum=values.reduce((a,b)=>a+b,0);
+ if(!max)return '<div class="v4empty">Não há '+(kind==='gain'?'vendas conciliadas':'proventos')+' registrados em '+h(year)+'.</div>';
+ return '<div class="v4chartvalue">'+money(sum)+'</div><div class="v4chartcaption">Total identificado em '+h(year)+'</div>'+
+ '<div class="v4chart" role="img" aria-label="'+h(label)+' mensais de '+h(year)+'">'+values.map((v,i)=>
+ '<div class="v4chartcol" title="'+String(i+1).padStart(2,'0')+'/'+h(year)+': '+money(v)+'">'+
+ '<div class="v4charttrack"><div class="'+(v<0?'v4barloss':'v4bargain')+'" style="height:'+Math.max(v===0?0:3,Math.abs(v)/max*100).toFixed(1)+'%"></div></div>'+
+ '<small>'+String(i+1).padStart(2,'0')+'</small></div>').join('')+'</div>'+
+ '<div class="v4chartcaption">'+(kind==='gain'?'Estimada por custo médio; perdas em vermelho.':'Recebimentos identificados na Movimentação B3.')+'</div>';
+}
+function v4Charts(){
+ const years=v4Years(),year=years.includes(ui.chartYear)?ui.chartYear:(years[0]||String(new Date().getFullYear()));
+ const income=Array(12).fill(0),realized=Array(12).fill(0),sales=v3realized();
+ for(const x of v4IncomeRows())if(x.month.startsWith(year)){const m=Number(x.month.slice(5))-1;if(m>=0&&m<12)income[m]+=x.value;}
+ for(const [m,v] of Object.entries(sales.monthly||{}))if(m.startsWith(year)){const n=Number(m.slice(5))-1;if(n>=0&&n<12)realized[n]+=v;}
+ return '<section class="v2panel"><div class="v2section"><h2>Gráficos históricos</h2><button data-page="performance">Ver resultados ›</button></div>'+
+ '<div class="v4years" role="group" aria-label="Ano dos gráficos">'+years.slice(0,9).map(y=>'<button type="button" data-v4-year="'+y+'" class="'+(year===y?'selected':'')+'">'+y+'</button>').join('')+'</div>'+
+ '<div class="v4chartgrid"><div class="v4chartpanel"><h3>Proventos por mês</h3>'+v4MonthlyBars('Proventos',income,year,'income')+'</div>'+
+ '<div class="v4chartpanel"><h3>Lucro nas vendas</h3>'+v4MonthlyBars('Ganho realizado',realized,year,'gain')+'</div></div></section>';
+}
+function v4ProfitPanel(D){
+ const profit=v3profit(D),real=v3realized(),unreal=v3unrealized(D),divs=D.incTotal;
+ return '<section class="v2panel"><div class="v2section"><h2>Lucro e rendimentos</h2><button data-page="performance">Ver detalhes ›</button></div>'+
+ '<button type="button" class="v4profitbanner" data-page="performance"><span><small>Lucro total acumulado</small><strong>'+(profit?money(profit.profit):'Configurar lucro total')+'</strong><small>'+(profit?'Patrimônio e caixa menos capital próprio':'Informe capital inicial e aportes para calcular o resultado real')+'</small></span><b>›</b></button>'+
+ '<div class="v4profitgrid"><button data-page="performance" class="v4profitstat"><small>Lucro nas vendas</small><strong>'+money(real.realized)+'</strong><em>Estimado pelo histórico</em></button>'+
+ '<button data-page="performance" class="v4profitstat"><small>Ganho em aberto</small><strong>'+(unreal.matched?money(unreal.unrealized):'—')+'</strong><em>'+(unreal.matched?'Parcial · '+unreal.matched+' de '+D.active.length+' posições':'Ainda não conciliado')+'</em></button>'+
+ '<button data-page="income" class="v4profitstat"><small>Proventos</small><strong>'+money(divs)+'</strong><em>Recebidos · B3</em></button></div>'+
+ (real.unmatched?'<p class="v2note">Há vendas sem compra anterior: lucro realizado pode estar incompleto.</p>':'')+
+ '</section>';
+}
+
 function v2home(D){
 const g=S.goal||{},pr=g.amount?Math.min(100,D.total/g.amount*100):0;
 return `${D.reported?.partial?'<div class="v2callout">Visão familiar parcial: falta importar a posição da outra pessoa.</div>':''}<section class="v2hero"><div class="v2kicker">Seu patrimônio ${D.reported?'na B3':'estimado'}</div><div class="v2money">${money(D.total)}</div><div class="v2mini"><span>${D.active.length} posições</span><span>${D.reported?v2date(D.reported.date):'Sem posição atual'}</span></div><button class="v2herolink" data-page="portfolio">Ver carteira ↗</button></section>
