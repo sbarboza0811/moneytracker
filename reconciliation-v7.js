@@ -152,8 +152,7 @@ E.gaps=function(state,owner='family',today=E.isoNow()){
   const p=state.reconciliation.positionMismatch.ITSA4;
   items.push({level:'warning',owner:'me',code:'historical-position-discrepancy',
     title:'ITSA4: '+p.historic_qty+' ações reconstruídas não constam na posição atual',
-    why:'As notas e bonificações de 2019 a 2026 indicam saldo de '+p.historic_qty+
-      ' ações após a venda de abril de 2026. O extrato de posição importado não apresenta ITSA4.',
+    why:p.reason||('A reconstrução documental indica '+p.historic_qty+' ações, ausentes da posição importada.'),
     action:'Conferir especificamente o saldo de ITSA4 na B3/Inter, ou uma transferência/negociação posterior. Não são necessárias novamente as notas de compras anteriores.'});
  }
  for(const o of selected){
