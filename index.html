@@ -393,19 +393,30 @@ function v3realized(){
  }
  return{realized,unmatched,sales,cost};
 }
+
+function v3unrealized(D){
+ const basis=v3realized().cost;let invested=0,unrealized=0,matched=0,missing=0;
+ for(const r of D.active){
+   const item=basis.get(stripFrac(r.code)),q=Number(r.qty);
+   if(!item||!q||item.qty<=0||Math.abs(item.qty-q)>Math.max(.0001,.002*q)){missing++;continue;}
+   invested+=Math.max(0,item.value);unrealized+=r.cost-Math.max(0,item.value);matched++;
+ }
+ return{invested,unrealized,matched,missing,complete:matched>0&&missing===0};
+}
+
 function v3calc(){
  const profit=v3profit(activity()),returns=v3realized();
  return{profit,returns,points:v3history()};
 }
 function v3performance(D){
- const owner=v3owner(),calc=v3profit(D),tr=v3realized(),history=v3history(),base=S.performanceBase?.[owner],account=S.cashBalances?.[owner]||0;
+ const owner=v3owner(),calc=v3profit(D),tr=v3realized(),unr=v3unrealized(D),history=v3history(),base=S.performanceBase?.[owner],account=S.cashBalances?.[owner]||0;
  const divs=groupRecords('mov').filter(r=>norm(r.v[0])==='CREDITO'&&['DIVIDENDO','RENDIMENTO','JUROS SOBRE CAPITAL PROPRIO'].includes(norm(r.v[2]))).reduce((n,r)=>n+(Number.isFinite(num(r.v[7]))?num(r.v[7]):0),0);
  const flows=(S.cashflows||[]).filter(f=>owner==='family'||f.owner===owner||f.toOwner===owner).slice().sort((a,b)=>b.date.localeCompare(a.date));
  return '<section class="v2panel"><div class="v2section"><h2>Resultado acumulado</h2><span class="v2chip">Desde o início</span></div>'+
  '<div class="v2value">'+(calc?money(calc.profit):'A configurar')+'</div><p class="v2muted">Patrimônio atual + saldo em contas − capital inicial − aportes líquidos. Transferências entre contas não zeram lucro.</p>'+
  (calc?'<div class="v2summary" style="margin-top:18px"><div class="v2stat"><small>Capital próprio</small><strong>'+money(calc.capital)+'</strong></div><div class="v2stat"><small>Saldo em contas</small><strong>'+money(calc.cash)+'</strong></div><div class="v2stat"><small>Patrimônio total</small><strong>'+money(calc.total)+'</strong></div></div>':'<div class="v2callout">Informe o saldo inicial e registre os aportes e retiradas desde essa data. Sem isso, o lucro total seria enganoso.</div>')+'</section>'+
- '<div class="v2summary"><div class="v2stat"><small>Lucro em vendas*</small><strong>'+money(tr.realized)+'</strong></div><div class="v2stat"><small>Proventos registrados</small><strong>'+money(divs)+'</strong></div><div class="v2stat"><small>Vendas sem custo*</small><strong>'+nfmt(tr.unmatched,2)+' un.</strong></div></div>'+
- '<p class="v2note">*Estimativas pelo histórico recebido; desdobramentos, transferências e compras não importadas podem alterar o lucro realizado. O resultado acumulado acima não soma esses componentes novamente.</p>'+
+ '<div class="v2summary"><div class="v2stat"><small>Lucro realizado*</small><strong>'+money(tr.realized)+'</strong></div><div class="v2stat"><small>Não realizado*</small><strong>'+(unr.matched?money(unr.unrealized):'—')+'</strong></div><div class="v2stat"><small>Proventos registrados</small><strong>'+money(divs)+'</strong></div></div>'+
+ '<p class="v2note">*Estimativas pelo histórico recebido; desdobramentos, transferências e compras não importadas podem alterar o lucro realizado. Valor aplicado remanescente identificado: '+(unr.matched?money(unr.invested):'—')+' em '+unr.matched+' de '+D.active.length+' posições reconciliadas. O resultado acumulado acima não soma esses componentes novamente.</p>'+
  '<section class="v2panel"><div class="v2section"><h2>Evolução da carteira</h2><span class="v2muted">'+history.length+' posições históricas</span></div>'+v3moneyChart(history)+'</section>'+
  '<section class="v2panel"><div class="v2section"><h2>Comparar com índices</h2><span class="v2chip">CDI · Ibovespa</span></div><div class="v2quick"><button class="v2btn outline" data-act="v3-benchmark">Buscar referências</button></div><div id="v3-benchmark-result">'+(ui.benchmark||'<p class="v2muted">Comparação somente quando houver pelo menos duas posições e os aportes do período forem conhecidos. CDI: Banco Central; Ibovespa: B3 via provedor externo.</p>')+'</div></section>'+
  (owner==='family'?'<div class="v2callout">Para configurar o resultado familiar, registre primeiro o ponto de partida e o caixa de cada pessoa separadamente.</div>':
