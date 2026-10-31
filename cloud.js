@@ -5,7 +5,8 @@ const $=id=>document.getElementById(id);
 let client=null,currentUser=null,saveTimer=null,saving=false,queued=null,saveFailed=false;
 const status=(s)=>{const x=$('mt-cloud-status');if(x)x.textContent=s;};
 const message=(s)=>{const x=$('mt-auth-status');if(x)x.textContent=s;};
-function lock(){ $('mt-auth-gate').hidden=false;$('mt-cloud-bar').hidden=true;currentUser=null; }
+function showLogin(info){const form=$('mt-auth-form');if(form)form.classList.add('mt-auth-ready');if(info)message(info);}
+function lock(){ $('mt-auth-gate').hidden=false;$('mt-cloud-bar').hidden=true;currentUser=null;showLogin(); }
 function unlock(){ $('mt-auth-gate').hidden=true;$('mt-cloud-bar').hidden=false; }
 const valid=v=>v&&v.v===3&&Array.isArray(v.records);
 async function fetchCloud(){
@@ -43,7 +44,14 @@ function scheduleSave(snapshot){
  queued=JSON.parse(JSON.stringify(snapshot));saveFailed=false;
  clearTimeout(saveTimer);saveTimer=setTimeout(doSave,800);status('Alterações pendentes');
 }
-window.MoneyTrackerCloud={scheduleSave};
+async function quote(symbol){
+ if(!client||!currentUser)throw Error('Entre na sua conta para consultar preços.');
+ const {data,error}=await client.functions.invoke('moneytracker-quotes',{body:{symbol}});
+ if(error){let detail=error.message||'Falha na cotação';try{const body=await error.context?.json();if(body?.error)detail=body.error;}catch{}throw Error(detail);}
+ if(!data||!Number.isFinite(Number(data.price)))throw Error(data?.error||'Não foi possível encontrar a cotação.');
+ return data;
+}
+window.MoneyTrackerCloud={scheduleSave,quote};
 async function enter(user){currentUser=user;status('Carregando...');await fetchCloud();unlock();}
 async function auth(action){
  if(!client){message('Configure um projeto Supabase independente no arquivo config.js.');return;}
@@ -87,9 +95,14 @@ async function init(){
  client=window.supabase.createClient(cfg.supabaseUrl,cfg.supabasePublishableKey,{
    auth:{persistSession:true,autoRefreshToken:true}
  });
- const {data,error}=await client.auth.getUser();
- if(error||!data?.user){message('Entre ou crie sua conta.');return;}
- try{await enter(data.user)}catch(e){lock();message(e.message||String(e));}
+ message('Restaurando sua sessão...');
+ const {data:sessionData,error:sessionError}=await client.auth.getSession();
+ if(sessionError||!sessionData?.session){showLogin('Entre ou crie sua conta.');return;}
+ try{
+  const {data,error}=await client.auth.getUser();
+  if(error||!data?.user)throw Error(error?.message||'Não foi possível validar sua sessão.');
+  await enter(data.user);message('');
+ }catch(e){message('Não foi possível carregar sua carteira: '+(e.message||e)+'. Verifique sua conexão e atualize a página.');}
 }
 init();
 })();
