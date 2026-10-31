@@ -143,7 +143,9 @@ E.gaps=function(state,owner='family',today=E.isoNow()){
     why:report.verified+' grupo(s) já conciliados por documentos. Restam '+g.excludedSales+
       ' registros em '+[...new Set(unresolved.map(x=>x.date+'|'+x.code))].length+
       ' grupos, entre eles '+codes.slice(0,12).join(', ')+'.',
-    action:'Confira os detalhes por ativo/data abaixo. A negociação já foi importada; faltam custos históricos ou eventos específicos das unidades.'});
+    action:(state?.reconciliation?.pendingDetails||[]).filter(x=>unresolved.some(y=>y.code===x.code&&y.date===x.date))
+      .map(x=>x.code+': '+x.reason).join(' | ')||
+      'Confira somente a origem do custo das unidades ainda não conciliadas, pois as notas de venda já estão importadas.'});
  }
  return items;
 };
