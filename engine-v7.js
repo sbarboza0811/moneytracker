@@ -254,10 +254,17 @@ function portfolio(state,owner='family'){
   const fromPosition=makeSnapshotHoldings(snapshot,p);
   const rows=[...(fromPosition||makeHistoricalHoldings(led,p)),...fixedIncomeHoldings(state,p)];
   rows.forEach(x=>{
-   if(x.origin==='position'&&x.group!=='Tesouro'){
-    const q=state.quotes?.[x.code],age=Date.now()-Date.parse(q?.at||'');
-    if(q&&/brapi/i.test(String(q.provider||''))&&Number.isFinite(+q.price)&&+q.price>0&&Number.isFinite(age)&&age>=0&&age<=4*86400000){
-      x.snapshotValue=x.value;x.value=Math.round(x.qty*(+q.price)*100)/100;x.unit=+q.price;x.origin='quote';x.quoteDate=q.at;
+   // Do not reprice Renda Fixa or unconfirmed positions.
+   if(x.origin==='position'&&x.group!=='Tesouro'&&!x.fixedIncome){
+    const q=state.quotes?.[x.code],price=Number(q?.price);
+    const fetchedAge=Date.now()-Date.parse(q?.at||'');
+    const marketAge=q?.marketDate?Date.now()-Date.parse(String(q.marketDate)+'T12:00:00Z'):null;
+    const validSource=/brapi|capital agora/i.test(String(q?.provider||''));
+    const validFetch=Number.isFinite(fetchedAge)&&fetchedAge>=0&&fetchedAge<=4*86400000;
+    const validMarket=marketAge===null||(Number.isFinite(marketAge)&&marketAge>=-86400000&&marketAge<=8*86400000);
+    if(validSource&&Number.isFinite(price)&&price>0&&validFetch&&validMarket){
+     x.snapshotValue=x.value;x.value=Math.round(x.qty*price*100)/100;x.unit=price;
+     x.origin='quote';x.quoteDate=q.marketDate||String(q.at).slice(0,10);x.quoteProvider=q.provider;
     }
    }
    holdings.push(x);
