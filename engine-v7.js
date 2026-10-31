@@ -143,7 +143,7 @@ function portfolio(state,owner='family'){
  return{owner,holdings,total,market,estimated,byPerson,classes,valuation:market>0&&estimated>0?'mixed':estimated>0?'historical':'position',
   confirmed:estimated===0&&holdings.length>0};
 }
-const DIVTYPES=new Set(['DIVIDENDO','RENDIMENTO','JUROS SOBRE CAPITAL PROPRIO','JCP','RESTITUICAO DE CAPITAL']);
+const DIVTYPES=new Set(['DIVIDENDO','RENDIMENTO','JUROS SOBRE CAPITAL PROPRIO','JCP']);
 function dividendRows(state,owner){
  const owners=owner==='family'?['me','spouse']:[ownerOf(owner)];
  return state.records.filter(r=>r.t==='mov'&&owners.includes(ownerOf(r.owner))&&norm(r.v[0])==='CREDITO'&&DIVTYPES.has(norm(r.v[2])))
