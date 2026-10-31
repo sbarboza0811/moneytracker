@@ -279,7 +279,7 @@ function more(){
  return card(titlebar('Conta e sincronização')+
  '<div class="mt7-row"><span class="mt7-symbol">☁</span><span class="info"><b>Sincronização Supabase</b><small id="mt7-cloud-status">'+esc(root.MoneyTrackerCloudV7?.status||'Conectado')+'</small></span></div>'+
  '<div class="mt7-actionrow" style="margin-top:15px"><button class="mt7-btn secondary" data-action="sync">Sincronizar</button>'+
- '<button class="mt7-btn ghost" data-action="logout">Sair da conta</button></div>')+
+ '<button class="mt7-btn ghost" data-action="logout">Sair da conta</button><button class="mt7-btn ghost" data-action="install-app">Instalar app</button></div>')+
  card(titlebar('Ferramentas')+
  [['history','◷','Histórico completo','Compras, vendas e movimentações'],['income','↓','Proventos','Dividendos e rendimentos'],['insights','✧','Análises','Concentração e riscos'],['quotes','◉','Cotações','Consultar preços dos ativos'],['needs','☑','Pendências','Documentos e dados faltantes']].map(([id,icon,label,desc])=>
  '<button data-nav="'+id+'" class="mt7-row" style="width:100%;border:0;border-bottom:1px solid #eef1ec;background:#fff"><span class="mt7-symbol">'+icon+'</span><span class="info"><b>'+label+'</b><small>'+desc+'</small></span><span>›</span></button>').join(''))+
@@ -358,6 +358,7 @@ function listen(){
   if(a==='backup')download('moneytracker-v7-backup-'+E.isoNow()+'.json',JSON.stringify({format:'moneytracker-backup',version:7,date:new Date().toISOString(),data:S},null,2));
   if(a==='restore-pick')document.getElementById('mt7-restore-file')?.click();
   if(a==='sync')await root.MoneyTrackerCloudV7?.sync();
+  if(a==='install-app')await root.MoneyTrackerInstallV7?.install();
   if(a==='logout')await root.MoneyTrackerCloudV7?.logout();
  });
  document.addEventListener('change',async event=>{
