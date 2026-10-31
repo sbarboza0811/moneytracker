@@ -90,6 +90,7 @@ E.gaps=function(state,owner='family',today=E.isoNow()){
    const led=E.ledger(state,'me'),port=E.portfolio(state,'me');
    const costFixed=new Set(extraOpenBasis(state,'me').map(x=>x.code));
    const entries=port.holdings.filter(h=>{
+    if(h.value===0&&/^[A-Z]{4}1[23]$/.test(E.codeOf(h.code)))return false;
     if(costFixed.has(h.code))return false;
     if(h.group==='Tesouro')return !(h.applied>0);
     if(h.origin!=='position'&&h.origin!=='quote')return true;
