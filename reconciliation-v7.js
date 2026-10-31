@@ -112,8 +112,8 @@ E.gaps=function(state,owner='family',today=E.isoNow()){
   }
   if(issue.owner!=='spouse'||issue.code!=='missing-position'||!historical?.rows?.length)return issue;
   return {...issue,level:'warning',code:'historical-spouse-position',
-   title:'Posição histórica da Jessica recebida; valor atual de 2026 ainda sem confirmação',
-   why:'A B3 confirmou '+historical.rows.length+' ativos em 31/12/2024. Este relatório histórico foi vinculado ao aplicativo; não é valorização atual de 2026.',
+   title:'Jessica: 16 ativos reconstruídos; valor de mercado de 2026 não confirmado',
+   why:'O relatório de 2024 já foi recebido. '+(state.reconciliation?.spouseDerivedHoldings?.assetsCount||0)+' ativos tiveram suas quantidades reconstruídas até setembro/2026 usando 35 negócios e desdobramento do ALZR11. Isso não substitui posição oficial de 2026 ou preços atuais.',
    action:'Nada a reenviar de 2024. Para valor de mercado atual, é necessária uma posição de 2026 se ela não estiver disponível nas fontes conectadas.'};
  });
  if(!getEntries(state).length)return revised.filter(x=>x.code!=='cash-flow-coverage');
