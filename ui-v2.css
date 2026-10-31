@@ -127,3 +127,9 @@ body .toast{right:15px!important;left:15px!important;bottom:90px!important;max-w
 .v4nativefile p{font-size:11px;line-height:1.5;color:#718b7d;margin:14px 0 0}
 @media(max-width:800px){.v4chartgrid{grid-template-columns:1fr}.v4profitgrid{gap:7px}.v4profitstat{padding:13px 9px}.v4profitstat strong{font-size:15px}}
 @media(max-width:370px){.v4profitgrid{grid-template-columns:1fr 1fr}.v4profitstat:last-child{grid-column:1/-1}.v4ownerselect button{font-size:12px;padding:12px 5px}}
+
+.v4cumulative{margin-top:15px;padding:17px;border:1px solid #e3eee5;border-radius:15px;background:linear-gradient(#fff,#fbfdfb)}
+.v4cumulative h3{margin:0 0 10px;font-size:14px;color:#204b37}
+.v4line{display:block;width:100%;height:auto;max-height:235px;margin-top:9px;overflow:visible}
+.v4lineaxis{display:flex;justify-content:space-between;color:#85998b;font-size:11px;margin:0 8px}
+.v4nativefile input[type=file]:focus-visible,.v4ownerselect button:focus-visible,.v4profitstat:focus-visible,.v4profitbanner:focus-visible{outline:3px solid #76cfae;outline-offset:2px}
