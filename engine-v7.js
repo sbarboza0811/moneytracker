@@ -232,8 +232,8 @@ function dividendRows(state,owner){
  .filter(r=>r.date&&Number.isFinite(r.amount)&&r.amount>=0);
 }
 function gains(state,owner='family',period='all',today=isoNow()){
- const from=cutoff(period,today),port=portfolio(state,owner),led=ledger(state,owner);
- const sales=led.sales.filter(x=>x.date>=from&&x.date<=today);
+ const from=cutoff(period,today),port=portfolio(state,owner),led=ledger(state,owner),bonds=treasuryLedger(state,owner);
+ const sales=[...led.sales,...bonds.sales].filter(x=>x.date>=from&&x.date<=today);
  const recognizedSales=sales.filter(x=>x.recognized&&Number.isFinite(x.profit));
  const excludedSales=sales.filter(x=>!x.recognized);
  const payouts=dividendRows(state,owner).filter(x=>x.date>=from&&x.date<=today);
@@ -258,7 +258,7 @@ function gains(state,owner='family',period='all',today=isoNow()){
  const openAvailable=period==='all'&&matched>0;
  const openIncluded=openAvailable?openGain:0;
  const profit=realized+dividends+openIncluded;
- const unmatched=led.problems.filter(p=>p.date<=today);
+ const unmatched=[...led.problems,...bonds.problems].filter(p=>p.date<=today);
  const missingWindow=period!=='all';
  const complete=port.holdings.length>0&&missing===0&&unmatched.length===0&&excludedSales.length===0&&period==='all';
  const monthly=new Map();
@@ -301,7 +301,7 @@ function gaps(state,owner='family',today=isoNow()){
   }
   // Ausência de operações em um ano é válida e não indica arquivo faltante.
   // Exigir histórico adicional apenas por lacunas comprovadas (como vendas sem compras).
-  const unverified=led.sales.filter(x=>x.owner===o&&!x.recognized);
+  const unverified=[...led.sales,...treasuryLedger(state,o).sales].filter(x=>x.owner===o&&!x.recognized);
   if(unverified.length){
    const codes=[...new Set(unverified.map(x=>x.code))];
    items.push({level:'critical',owner:o,
