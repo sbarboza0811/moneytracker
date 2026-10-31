@@ -27,7 +27,7 @@ function layout(content){
  '<aside class="mt7-side"><div class="mt7-brand"><i>↗</i><span>money<span>tracker</span></span></div>'+
  '<nav>'+NAV.map(n=>'<button type="button" data-nav="'+n[0]+'" class="'+(ui.page===n[0]?'active':'')+'"><span class="ico">'+n[1]+'</span>'+n[2]+'</button>').join('')+
  '<button data-nav="more"><span class="ico">☰</span>Mais</button></nav>'+
- '<div class="foot">Seus investimentos, no seu controle.<div class="mt7-version">MoneyTracker 7.2 · Dados privados</div></div></aside>'+
+ '<div class="foot">Seus investimentos, no seu controle.<div class="mt7-version">MoneyTracker 7.3 · Dados privados</div></div></aside>'+
  '<main class="mt7-body"><header class="mt7-top"><div><div class="mt7-eyebrow">MoneyTracker / Versão 7</div><h1>'+pages[ui.page]+'</h1></div>'+
  '<div class="mt7-top-actions"><button data-nav="needs" title="O que falta para completar" class="mt7-iconbtn" aria-label="Pendências">☑</button>'+
  '<button data-nav="more" title="Conta, backup e sincronização" class="mt7-iconbtn" aria-label="Mais">☰</button></div></header>'+
