@@ -55,7 +55,7 @@ function audit(state,owner='family',period='all',today=E.isoNow()){
   const verified=rec.status==='CALCULAVEL_BRUTO'&&Number.isFinite(num(rec.basis))&&rec.basis!==null;
   for(const row of groupRows){
    // Aloca lucro apenas às linhas conciliadas desta venda, sem sobrescrever outra corretora.
-   const share=gross>0?num(row.gross)/gross:1/rows.length;
+   const share=gross>0?num(row.gross)/gross:1/groupRows.length;
    overrides.set(row,{
     recognized:verified,uncertain:!verified,
     profit:verified?(num(rec.gross)-num(rec.basis))*share:null,
@@ -203,11 +203,7 @@ E.gains=function(state,owner='family',period='all',today=E.isoNow()){
  if(missing){
   if(owner==='spouse'&&!state.spousePositionSnapshot?.rows?.length)
    parts.push('A posição histórica da Jessica foi recebida; sem um valor de mercado atual, a valorização em aberto não pode ser concluída.');
-  else if(owner==='me'&&missing===2)
-   parts.push('BOVA11 e BEST11: as compras de 28/10/2026 estão no histórico, mas não na posição exportada. A avaliação dessas unidades permanece fora do lucro em aberto.');
-  else if(owner==='family')
-   parts.push('Avaliação familiar parcial: posição de Jessica histórica e compras recentes de BOVA11/BEST11 não refletidas no snapshot.');
-  else parts.push(missing+' posições abertas sem custo/preço suficiente.');
+  else parts.push(missing+' posições abertas ainda sem custo/preço suficiente para valorização completa.');
  }
  if(period!=='all')parts.push('Sem preço histórico, a valorização de posições abertas neste intervalo não é apurada.');
  if(remainingProblems.length)parts.push('Existem '+remainingProblems.length+' problemas históricos ainda não conciliados.');
