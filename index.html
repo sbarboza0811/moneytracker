@@ -134,45 +134,79 @@ const header=t=>t==='trade'?NHEAD:MHEAD;
 function dateOf(r){return orderDate(r.v[r.t==='trade'?0:1]);}
 function currentMonth(){return new Date().toISOString().slice(0,7);}
 function activity(){
-  const trade=groupRecords('trade').slice().sort((a,b)=>dateOf(a).localeCompare(dateOf(b)));
-  const map=new Map();let unmatched=0;
-  for(const row of trade){const [date,action,market,expiry,institution,ticker,q,p,value]=row.v;
-    const code=stripFrac(ticker);if(!code)continue;
-    if(!map.has(code))map.set(code,{code,qty:0,cost:0,trades:0,unmatched:0,last:date,institutions:new Set()});
-    const v=map.get(code),quantity=num(q),amt=num(value);if(!Number.isFinite(quantity)||!Number.isFinite(amt))continue;
-    v.institutions.add(institution);v.last=date;v.trades++;
-    if(norm(action)==='COMPRA'){v.cost+=amt;v.qty+=quantity;}
-    else if(norm(action)==='VENDA'){const before=v.qty;if(before>0){const covered=Math.min(quantity,before);v.cost-=v.cost/before*covered;v.qty-=covered;}if(quantity>before){v.unmatched+=quantity-Math.max(before,0);unmatched+=quantity-Math.max(before,0);} }
-  }
-  let holdings=[...map.values()].map(r=>({code:r.code,qty:+r.qty.toFixed(7),cost:Math.max(0,r.cost),pm:r.qty>0?r.cost/r.qty:0,trades:r.trades,unmatched:r.unmatched,cat:classify(r.code,S.classes),institutions:[...r.institutions]})).filter(x=>x.qty>0.0000001||x.unmatched>0).sort((a,b)=>b.cost-a.cost);
-  let active=holdings.filter(x=>x.qty>0.0000001);let total=active.reduce((s,x)=>s+x.cost,0);
-  let cats=Object.fromEntries(CATS.map(x=>[x.id,0]));for(const r of active)cats[r.cat]=(cats[r.cat]||0)+r.cost;
-  const inc=groupRecords('mov').filter(r=>{const x=norm(r.v[2]);return['DIVIDENDO','RENDIMENTO','JUROS SOBRE CAPITAL PROPRIO'].includes(x)&&norm(r.v[0])==='CREDITO'&&Number.isFinite(num(r.v[7]));});
-  const incTotal=inc.reduce((s,r)=>s+num(r.v[7]),0);
-  
-  const historicalTotal=total;
-  const own=ui.owner||'me';
-  const pMe=S.positionSnapshot?.rows?.length?S.positionSnapshot:null;
-  const pSp=S.spousePositionSnapshot?.rows?.length?S.spousePositionSnapshot:null;
-  const reported=own==='me'?pMe:own==='spouse'?pSp:(pMe||pSp)?{
-    date:pMe&&pSp?(pMe.date===pSp.date?pMe.date:'datas diferentes'):(pMe||pSp).date,
-    source:'Consolidado',rows:[...(pMe?.rows||[]).map(x=>({...x,owner:'me'})),...(pSp?.rows||[]).map(x=>({...x,owner:'spouse'}))],
-    total:Number(pMe?.total||0)+Number(pSp?.total||0),partial:!(pMe&&pSp)
-  }:null;
-  if(reported){
-    holdings=reported.rows.filter(r=>Number.isFinite(Number(r.value))&&Number(r.value)>=0).map(r=>{
-      const code=r.group==='Tesouro Direto'?r.product:(r.code||r.product);
-      const qty=Number(r.qty)||0,market=Number(r.value)||0;
-      let cat=r.group==='Tesouro Direto'?'rf':r.group==='Fundo de Investimento'?'fii':(S.classes?.[code]||(['IVVB11','CHIP11','TECK11','GOLD11'].includes(code)?'global':'etfbr'));
-      return{code,qty,cost:market,pm:qty?market/qty:0,trades:0,unmatched:0,cat,product:r.product,sourceGroup:r.group,institutions:[r.institution||''],owner:r.owner||(own==='spouse'?'spouse':'me'),reported:true};
-    }).sort((a,b)=>b.cost-a.cost);
-    active=holdings.filter(r=>r.qty>0);
-    total=Math.round(active.reduce((s,r)=>s+r.cost,0)*100)/100;
-    cats=Object.fromEntries(CATS.map(x=>[x.id,0]));
-    for(const r of active)cats[r.cat]=(cats[r.cat]||0)+r.cost;
-  }
-
-  return{trade,holdings,active,total,cats,inc,incTotal,unmatched,reported,historicalTotal,latest:trade.reduce((m,x)=>dateOf(x)>m?dateOf(x):m,'0000'),counts:{trade:groupRecords('trade').length,mov:groupRecords('mov').length}};
+ const own=ui.owner||'me',selected=own==='family'?['me','spouse']:[own];
+ const trade=groupRecords('trade').slice().sort((a,b)=>dateOf(a).localeCompare(dateOf(b)));
+ const hist=new Map();let unmatched=0;
+ for(const row of trade){
+   const [,action,, ,institution,ticker,q,,value]=row.v;
+   const code=stripFrac(ticker),owner=row.owner==='spouse'?'spouse':'me';
+   if(!code)continue;
+   const key=owner+'\u0001'+code,quantity=num(q),amount=num(value);
+   if(!hist.has(key))hist.set(key,{code,owner,qty:0,cost:0,trades:0,unmatched:0,institutions:new Set()});
+   const r=hist.get(key);
+   if(!Number.isFinite(quantity)||!Number.isFinite(amount)||quantity<=0||amount<0)continue;
+   r.institutions.add(institution);r.trades++;
+   if(norm(action)==='COMPRA'){r.cost+=amount;r.qty+=quantity;}
+   else if(norm(action)==='VENDA'){
+     const available=Math.max(0,r.qty),covered=Math.min(quantity,available);
+     if(covered){r.cost-=r.cost/available*covered;r.qty-=covered;}
+     if(quantity>available){r.unmatched+=quantity-available;unmatched+=quantity-available;}
+   }
+ }
+ const historical=Array.from(hist.values()).map(r=>({
+   code:r.code,owner:r.owner,product:r.code,qty:+r.qty.toFixed(7),cost:Math.max(0,r.cost),
+   pm:r.qty>0?Math.max(0,r.cost)/r.qty:0,trades:r.trades,unmatched:r.unmatched,
+   cat:classify(r.code,S.classes),institutions:[...r.institutions],
+   reported:false,estimated:true,sourceGroup:'Histórico de negociações B3'
+ })).filter(r=>r.qty>0.0000001||r.unmatched>0);
+ const snapshots={
+   me:S.positionSnapshot?.rows?.length?S.positionSnapshot:null,
+   spouse:S.spousePositionSnapshot?.rows?.length?S.spousePositionSnapshot:null
+ };
+ const fromSnapshot=(owner)=>{
+   const p=snapshots[owner];if(!p)return null;
+   return p.rows.filter(r=>Number.isFinite(Number(r.value))&&Number(r.value)>=0).map(r=>{
+     const code=r.group==='Tesouro Direto'?r.product:(r.code||r.product),qty=Number(r.qty)||0,market=Number(r.value)||0;
+     const cat=r.group==='Tesouro Direto'?'rf':r.group==='Fundo de Investimento'?'fii':classify(code,S.classes);
+     return{code,owner,qty,cost:market,pm:qty?market/qty:0,trades:0,unmatched:0,cat,
+       product:r.product,sourceGroup:r.group,institutions:[r.institution||''],reported:true,estimated:false,
+       positionDate:p.date};
+   });
+ };
+ const holdings=selected.flatMap(owner=>fromSnapshot(owner)||historical.filter(r=>r.owner===owner))
+   .sort((a,b)=>b.cost-a.cost);
+ const active=holdings.filter(r=>r.qty>0.0000001);
+ const total=Math.round(active.reduce((n,r)=>n+r.cost,0)*100)/100;
+ const confirmedTotal=Math.round(active.filter(r=>r.reported).reduce((n,r)=>n+r.cost,0)*100)/100;
+ const estimatedTotal=Math.round(active.filter(r=>r.estimated).reduce((n,r)=>n+r.cost,0)*100)/100;
+ const cats=Object.fromEntries(CATS.map(c=>[c.id,0]));
+ for(const r of active)cats[r.cat]=(cats[r.cat]||0)+r.cost;
+ const inc=groupRecords('mov').filter(r=>{
+   const kind=norm(r.v[2]);return['DIVIDENDO','RENDIMENTO','JUROS SOBRE CAPITAL PROPRIO'].includes(kind)&&
+     norm(r.v[0])==='CREDITO'&&Number.isFinite(num(r.v[7]));
+ });
+ const incTotal=inc.reduce((n,r)=>n+num(r.v[7]),0);
+ const withReports=selected.filter(owner=>snapshots[owner]),missingReports=selected.filter(owner=>!snapshots[owner]);
+ let reported=null;
+ if(withReports.length){
+   reported={
+     date:withReports.length===1?snapshots[withReports[0]].date:
+       snapshots[withReports[0]].date===snapshots[withReports[1]].date?snapshots[withReports[0]].date:'datas diferentes',
+     source:own==='family'?'Consolidado de posições':'Posição B3',
+     rows:withReports.flatMap(owner=>snapshots[owner].rows.map(r=>({...r,owner}))),
+     total:confirmedTotal,
+     partial:missingReports.length>0
+   };
+ }
+ const valueMode=confirmedTotal>0&&estimatedTotal>0?'mixed':
+   missingReports.length===0?'b3':'cost';
+ const historicalTotal=historical.filter(r=>selected.includes(r.owner)&&r.qty>0).reduce((n,r)=>n+r.cost,0);
+ return{
+   trade,holdings,active,total,cats,inc,incTotal,unmatched,reported,historicalTotal,
+   confirmedTotal,estimatedTotal,valueMode,missingReports,sourceDates:Object.fromEntries(selected.map(o=>[o,snapshots[o]?.date||null])),
+   latest:trade.reduce((date,r)=>dateOf(r)>date?dateOf(r):date,'0000'),
+   counts:{trade:groupRecords('trade').length,mov:groupRecords('mov').length}
+ };
 }
 const color=c=>CATS.find(x=>x.id===c)?.c||'#8595a0';const catname=c=>CATS.find(x=>x.id===c)?.n||c;
 function layout(content){const section=PAGES.find(x=>x[0]===page)?.[2]||'Painel';return `<div class="app"><aside class="side"><div class="logo"><span class="logo-icon">↗</span><span>money<b>tracker</b></span></div><div class="side-title">Investimentos</div><nav class="nav">${PAGES.map(x=>`<button data-page="${x[0]}" class="${page===x[0]?'active':''}"><span class="nav-icon">${x[1]}</span>${x[2]}</button>`).join('')}</nav><div class="sidefoot"><strong>Fonte dos dados: arquivos B3</strong>Uso pessoal, sem conexão a corretoras. Acesso pela sua conta; histórico e posições sincronizados com o Supabase.</div></aside><main class="workspace"><header class="top"><div><div class="eyebrow">MoneyTracker / ${section}</div><h1>${section}</h1></div><div class="actions"><span class="chip desktop-only">Conta sincronizada</span><button class="btn outline" data-act="open-import">⇧ Importar</button><button class="btn" data-act="add-trade">＋ Lançamento</button></div></header>${content}</main></div><nav class="footnav">${[['home','⌂','Início'],['portfolio','▤','Carteira'],['ai','✦','Análise'],['records','≡','Registros'],['files','⇅','B3']].map(x=>`<button data-page="${x[0]}" class="${page===x[0]?'active':''}"><span class="nav-icon">${x[1]}</span>${x[2]}</button>`).join('')}</nav>`;}
@@ -235,7 +269,7 @@ function filesPage(){const sources=Object.entries(S.sources||{}),tCount=groupRec
 function v2nav(){return [['home','⌂','Início'],['portfolio','▤','Carteira'],['performance','↗','Lucro'],['files','⇧','Importar'],['more','☰','Mais']]}
 function v3ownerPicker(){const chosen=ui.owner||'me';return `<div class="v3ownerpicker" role="group" aria-label="Carteira visualizada">${[['me','Minha'],['spouse','Esposa'],['family','Família']].map(([id,title])=>`<button type="button" data-owner="${id}" class="${chosen===id?'active':''}">${title}</button>`).join('')}</div>`;}
 function v2layout(content){
-const pages={home:'Início',portfolio:'Minha carteira',asset:'Detalhes do ativo',income:'Proventos',ai:'Seus insights',files:'Atualizar dados',records:'Histórico',goals:'Meu objetivo',strategy:'Alocação',scenarios:'Cenários',performance:'Resultados',quotes:'Cotações',more:'Mais'};
+const pages={home:'Início',portfolio:(ui.owner==='family'?'Carteira familiar':ui.owner==='spouse'?'Carteira da esposa':'Minha carteira'),asset:'Detalhes do ativo',income:'Proventos',ai:'Seus insights',files:'Atualizar dados',records:'Histórico',goals:'Meu objetivo',strategy:'Alocação',scenarios:'Cenários',performance:'Resultados',quotes:'Cotações',more:'Mais'};
 const nav=v2nav();
 return `<div class="v2shell"><aside class="v2side"><div class="v2logo"><i>↗</i>money<b>tracker</b></div><nav class="v2nav">${nav.map(([id,ico,label])=>`<button data-page="${id}" class="${page===id?'active':''}"><span class="v2ni">${ico}</span>${label}</button>`).join('')}</nav><div style="margin-top:auto;font-size:11px;color:#8b9990">Sua carteira B3 · Privada</div></aside><main class="v2main"><header class="v2head"><div><small>${page==='home'?'Seu patrimônio em um só lugar':'MoneyTracker'}</small><div class="v2titleline">${!nav.some(n=>n[0]===page)?'<button class="v2back" data-act="v2-back">‹</button>':''}<h1>${pages[page]||'MoneyTracker'}</h1></div></div><div style="display:flex;align-items:center;gap:8px"><div id="mt-cloud-holder"></div><button class="v2user" data-page="more" aria-label="Conta">S</button></div></header>${v3ownerPicker()}<div class="v2content">${content}</div></main><nav class="v2bottom">${nav.map(([id,ico,label])=>`<button data-page="${id}" class="${page===id?'active':''}"><b>${ico}</b>${label}</button>`).join('')}</nav></div>`;
 }
@@ -317,13 +351,34 @@ function v4ProfitPanel(D){
  '</section>';
 }
 
+function v5SourceLabel(D){
+ return D.valueMode==='mixed'?'Consolidação indicativa · B3 + custo histórico':
+   D.valueMode==='b3'?'Posições do relatório B3':'Custo histórico estimado · não é valor de mercado';
+}
+function v5ValuationNotice(D){
+ if(D.valueMode==='mixed'){
+   return '<section class="v2panel v5source" role="status"><div class="v2section"><h2>De onde vem o total?</h2><span class="v2chip warn">Parcial</span></div>'+
+   '<div class="v5sourcerows"><button type="button" data-owner="me"><span>Minha posição B3</span><strong>'+money(D.confirmedTotal)+'</strong></button>'+
+   '<button type="button" data-owner="spouse"><span>Esposa · custo histórico</span><strong>'+money(D.estimatedTotal)+'</strong></button></div>'+
+   '<p>Consolidado indicativo: soma de valores com bases diferentes. O custo histórico da esposa <b>não equivale ao patrimônio atual</b>, e o histórico pode estar incompleto. Importe a Posição B3 dela para obter o consolidado de mercado.</p>'+
+   '<button class="v2btn outline" data-page="files">Importar posição da esposa ›</button></section>';
+ }
+ if(D.valueMode==='cost'&&D.active.length){
+   return '<div class="v2callout"><strong>Carteira estimada pelo histórico.</strong> '+money(D.total)+
+   ' representa o custo de compras remanescentes, não a cotação atual. Se houve desdobramentos, transferências ou dados ausentes, até as quantidades podem divergir. <button class="muted-link" data-page="files">Importar posição ›</button></div>';
+ }
+ if(D.valueMode==='b3'&&ui.owner==='family'){
+   return '<div class="v2callout">As duas carteiras usam os últimos relatórios de Posição B3. Confira as datas individuais: '+h(D.sourceDates.me||'—')+' e '+h(D.sourceDates.spouse||'—')+'.</div>';
+ }
+ return '';
+}
 function v2home(D){
  const g=S.goal||{},pr=g.amount?Math.min(100,D.total/g.amount*100):0;
- return '<section class="v2hero"><div class="v2kicker">Patrimônio '+(D.reported?'da posição B3':'estimado')+'</div>'+
+ return '<section class="v2hero"><div class="v2kicker">'+v5SourceLabel(D)+'</div>'+
  '<div class="v2money">'+money(D.total)+'</div>'+
- '<div class="v2mini"><span>'+D.active.length+' posições</span><span>'+(D.reported?v2date(D.reported.date):'Sem posição atual')+'</span></div>'+
+ '<div class="v2mini"><span>'+D.active.length+' posições</span><span>'+(D.valueMode==='mixed'?'2 titulares · fontes diferentes':D.reported?v2date(D.reported.date):'Sem posição B3')+'</span></div>'+
  '<button class="v2herolink" data-page="portfolio">Ver investimentos ›</button></section>'+
- (D.reported?.partial?'<div class="v2callout">Consolidado parcial: falta importar a posição da outra pessoa.</div>':'')+
+ v5ValuationNotice(D)+
  v4ProfitPanel(D)+v4Charts()+
  '<div class="v2layout"><section class="v2panel"><div class="v2section"><h2>Distribuição</h2><button data-page="strategy">Ver metas ›</button></div>'+v2allocation(D)+'</section>'+
  '<section class="v2panel"><div class="v2section"><h2>Maiores posições</h2><button data-page="portfolio">Ver carteira ›</button></div>'+
@@ -336,14 +391,14 @@ function v2home(D){
 function v2portfolio(D){
 const filter=ui.portfolioFilter||'';let rows=D.holdings.filter(r=>!filter||(filter==='etf'?r.sourceGroup==='ETF'||['etfbr','global'].includes(r.cat):filter==='fii'?r.cat==='fii':filter==='rf'?r.cat==='rf':r.cat===filter));
 if(ui.search)rows=rows.filter(r=>norm([r.code,r.product,r.institutions?.join(' ')].join(' ')).includes(norm(ui.search)));
-return `<section class="v2hero"><div class="v2kicker">Total em carteira</div><div class="v2money">${money(D.total)}</div><div class="v2mini"><span>${D.reported?'Relatório B3':'Estimado'}</span><span>${D.reported?v2date(D.reported.date):'Sem posição'}</span></div></section>
+return `<section class="v2hero"><div class="v2kicker">${v5SourceLabel(D)}</div><div class="v2money">${money(D.total)}</div><div class="v2mini"><span>${D.valueMode==='mixed'?'Fontes diferentes':D.reported?'Relatório B3':'Estimado'}</span><span>${D.valueMode==='mixed'?'B3 + histórico':D.reported?v2date(D.reported.date):'Sem posição'}</span></div></section>${v5ValuationNotice(D)}
 <section class="v2panel"><div class="v2section"><h2>Filtrar ativos</h2><span class="v2chip">${rows.length} posições</span></div><div class="v2filter">${[['','Todos'],['etf','ETFs'],['fii','FIIs'],['rf','Tesouro / RF']].map(([k,n])=>`<button data-v2-filter="${k}" class="${k===filter?'selected':''}">${n}</button>`).join('')}</div><div style="margin-top:14px"><input id="search" class="v2field" placeholder="Buscar ativo ou código" value="${h(ui.search||'')}"></div></section>
 <section class="v2panel"><div class="v2section"><h2>Suas posições</h2><span class="v2muted">Maior valor primeiro</span></div><div class="v2list">${rows.slice(0,ui.pageLimit||80).map(v2hold).join('')||'<div class="v2empty">Nenhum ativo encontrado.</div>'}</div>${rows.length>(ui.pageLimit||80)?'<button class="v2btn outline" data-act="show-more">Ver mais</button>':''}</section><button class="v2btn outline" data-page="files">Atualizar posição B3</button>`;
 }
 function v2asset(D){
 const r=D.holdings.find(x=>x.code===ui.selectedAsset&&(!ui.selectedAssetOwner||x.owner===ui.selectedAssetOwner));if(!r)return '<section class="v2panel">Ativo não encontrado.</section>';
-const ops=S.records.filter(x=>(ui.owner==='family'||(x.owner||'me')===(ui.owner||'me'))&&norm(x.v.join(' ')).includes(norm(r.code))).sort((a,b)=>dateOf(b).localeCompare(dateOf(a))).slice(0,10);
-return `<section class="v2hero"><div class="v2kicker">${h(r.product||r.code)}</div><div style="margin-top:12px;font-size:12px;color:#cee9de">Valor da posição ${r.reported?'B3':'estimado'}</div><div class="v2money">${money(r.cost)}</div><div class="v2mini"><span>${nfmt(r.qty,5)} un.</span><span>${D.reported?v2date(D.reported.date):'Histórico'}</span></div></section><div class="v2kpirow"><div class="v2stat"><small>Quantidade</small><strong>${nfmt(r.qty,5)}</strong></div><div class="v2stat"><small>Por unidade</small><strong>${money(r.pm)}</strong></div><div class="v2stat"><small>Na carteira</small><strong>${v2pct(r.cost,D.total)}</strong></div></div><section class="v2panel"><div class="v2section"><h2>Cotação consultada</h2><button data-page="quotes">Todas ›</button></div>${v3quoteValue(r)?`<div class="v2value">${money(v3quoteValue(r).price)} / un.</div><p class="v2muted">Estimativa da posição: ${money(v3quoteValue(r).total)} · ${h(v3quoteValue(r).provider)} · ${v3date(String(v3quoteValue(r).at).slice(0,10))}</p>`:`<div class="v2muted">Sem cotação mais recente. Último preço da posição B3: ${money(r.pm)} / un.</div>`}${r.sourceGroup==='Tesouro Direto'?'<p class="v2note">Para títulos públicos, atualize o relatório de Posição B3.</p>':`<button style="margin-top:14px" class="v2btn" data-v3-fetch-quote="${h(r.code)}">Consultar cotação</button>`}</section><section class="v2panel"><div class="v2section"><h2>Operações identificadas</h2><button data-page="records">Histórico ›</button></div>${ops.map(x=>`<div class="v2row"><span class="v2bubble">${x.t==='trade'?'⇄':'◷'}</span><span class="v2rowinfo"><b>${h(x.t==='trade'?x.v[1]:x.v[2])}</b><small>${v2date(dateOf(x))}</small></span><span class="v2rowright"><strong>${money(num(x.v[x.t==='trade'?8:7]))}</strong></span></div>`).join('')||'<div class="v2empty">Sem operações associadas ao código.</div>'}</section><div class="v2quick"><button class="v2btn" data-act="add-trade">＋ Negociação</button><button class="v2btn outline" data-page="portfolio">Voltar à carteira</button></div>`;
+const ops=S.records.filter(x=>(x.owner==='spouse'?'spouse':'me')===r.owner && (x.t==='trade'?stripFrac(x.v[5])===stripFrac(r.code):norm(x.v[3]).includes(norm(r.code)))).sort((a,b)=>dateOf(b).localeCompare(dateOf(a))).slice(0,10);
+return `<section class="v2hero"><div class="v2kicker">${h(r.product||r.code)}</div><div style="margin-top:12px;font-size:12px;color:#cee9de">Valor da posição ${r.reported?'B3':'estimado'}</div><div class="v2money">${money(r.cost)}</div><div class="v2mini"><span>${nfmt(r.qty,5)} un.</span><span>${r.reported?v2date(r.positionDate):'Custo histórico'}</span></div></section><div class="v2kpirow"><div class="v2stat"><small>Quantidade</small><strong>${nfmt(r.qty,5)}</strong></div><div class="v2stat"><small>Por unidade</small><strong>${money(r.pm)}</strong></div><div class="v2stat"><small>Na carteira</small><strong>${v2pct(r.cost,D.total)}</strong></div></div><section class="v2panel"><div class="v2section"><h2>Cotação consultada</h2><button data-page="quotes">Todas ›</button></div>${v3quoteValue(r)?`<div class="v2value">${money(v3quoteValue(r).price)} / un.</div><p class="v2muted">Estimativa da posição: ${money(v3quoteValue(r).total)} · ${h(v3quoteValue(r).provider)} · ${v3date(String(v3quoteValue(r).at).slice(0,10))}</p>`:`<div class="v2muted">Sem cotação mais recente. ${r.reported?'Preço da última posição B3':'Preço médio histórico estimado'}: ${money(r.pm)} / un.</div>`}${r.sourceGroup==='Tesouro Direto'?'<p class="v2note">Para títulos públicos, atualize o relatório de Posição B3.</p>':`<button style="margin-top:14px" class="v2btn" data-v3-fetch-quote="${h(r.code)}">Consultar cotação</button>`}</section><section class="v2panel"><div class="v2section"><h2>Operações identificadas</h2><button data-page="records">Histórico ›</button></div>${ops.map(x=>`<div class="v2row"><span class="v2bubble">${x.t==='trade'?'⇄':'◷'}</span><span class="v2rowinfo"><b>${h(x.t==='trade'?x.v[1]:x.v[2])}</b><small>${v2date(dateOf(x))}</small></span><span class="v2rowright"><strong>${money(num(x.v[x.t==='trade'?8:7]))}</strong></span></div>`).join('')||'<div class="v2empty">Sem operações associadas ao código.</div>'}</section><div class="v2quick"><button class="v2btn" data-act="add-trade">＋ Negociação</button><button class="v2btn outline" data-page="portfolio">Voltar à carteira</button></div>`;
 }
 
 function v3incomeBars(year){
@@ -365,7 +420,7 @@ return `<section class="v2panel"><div class="v2section"><h2>Recebimentos</h2><sp
 }
 function v2insights(D){
 const top=D.active[0],largest=CATS.map(c=>({...c,v:D.cats[c.id]||0})).sort((a,b)=>b.v-a.v)[0],g=S.goal||{},progress=g.amount?Math.min(100,D.total/g.amount*100):0;
-return `<section class="v2panel"><div class="v2section"><h2>Visão geral</h2><span class="v2chip">✧ Diagnóstico</span></div><div class="v2value" style="font-size:21px">${D.total?'Maior peso: '+h(largest.n):'Sem posição importada'}</div><p class="v2muted" style="margin-top:8px">${D.total?v2pct(largest.v,D.total)+' do valor informado nessa classe.':'Atualize sua posição para analisar.'}</p></section><section class="v2panel"><div class="v2section"><h2>Leituras da carteira</h2></div>${[['◉','Maior posição',top?`${h(top.product||top.code)} · ${money(top.cost)}`:'Não identificada'],['◎','Exposição global',`${money(D.cats.global||0)} · ${v2pct(D.cats.global||0,D.total)}`],['↻','Atualização',D.reported?`Posição B3 de ${v2date(D.reported.date)}; não são preços ao vivo.`:'Importe um extrato de Posição B3']].map(([i,t,x])=>`<div class="v2row"><span class="v2bubble">${i}</span><span class="v2rowinfo"><b>${t}</b><small style="white-space:normal">${x}</small></span></div>`).join('')}</section><section class="v2panel"><div class="v2section"><h2>Objetivo</h2><button data-page="goals">Editar ›</button></div><div class="v2row" style="border:0"><div class="v2rowinfo"><b>${h(g.name||'Seu objetivo')}</b><small>${money(D.total)} / ${money(g.amount||0)}</small></div><strong>${nfmt(progress,1)}%</strong></div><div class="v2progress"><div style="width:${progress}%"></div></div><p class="v2muted" style="margin-top:12px">Faltam ${money(Math.max(0,(g.amount||0)-D.total))}</p></section><div class="v2quick"><button class="v2btn outline" data-page="strategy">Alocação-alvo</button><button class="v2btn outline" data-page="scenarios">Cenários</button></div>`;
+return `<section class="v2panel"><div class="v2section"><h2>Visão geral</h2><span class="v2chip">✧ Diagnóstico</span></div><div class="v2value" style="font-size:21px">${D.total?'Maior peso: '+h(largest.n):'Sem posição importada'}</div><p class="v2muted" style="margin-top:8px">${D.total?v2pct(largest.v,D.total)+' do valor informado nessa classe.':'Atualize sua posição para analisar.'}</p></section><section class="v2panel"><div class="v2section"><h2>Leituras da carteira</h2></div>${[['◉','Maior posição',top?`${h(top.product||top.code)} · ${money(top.cost)}`:'Não identificada'],['◎','Exposição global',`${money(D.cats.global||0)} · ${v2pct(D.cats.global||0,D.total)}`],['↻','Atualização',D.valueMode==='mixed'?'B3 individual + custo histórico da esposa; não é valor de mercado.':D.reported?`Posição B3 de ${v2date(D.reported.date)}; não são preços ao vivo.`:'Somente custo histórico; importe a Posição B3']].map(([i,t,x])=>`<div class="v2row"><span class="v2bubble">${i}</span><span class="v2rowinfo"><b>${t}</b><small style="white-space:normal">${x}</small></span></div>`).join('')}</section><section class="v2panel"><div class="v2section"><h2>Objetivo</h2><button data-page="goals">Editar ›</button></div><div class="v2row" style="border:0"><div class="v2rowinfo"><b>${h(g.name||'Seu objetivo')}</b><small>${money(D.total)} / ${money(g.amount||0)}</small></div><strong>${nfmt(progress,1)}%</strong></div><div class="v2progress"><div style="width:${progress}%"></div></div><p class="v2muted" style="margin-top:12px">Faltam ${money(Math.max(0,(g.amount||0)-D.total))}</p></section><div class="v2quick"><button class="v2btn outline" data-page="strategy">Alocação-alvo</button><button class="v2btn outline" data-page="scenarios">Cenários</button></div>`;
 }
 function v2files(D){
  const owner=ui.importOwner==='spouse'?'spouse':ui.importOwner==='me'?'me':(ui.owner==='spouse'?'spouse':'me');
