@@ -17,6 +17,20 @@ function getEntries(state){
  /^[A-Z0-9]{4,12}$/.test(String(x.code||''))&&validStatus(x.status));
 }
 function saleKey(x){return x.owner+'|'+x.date+'|'+E.codeOf(x.code);}
+function extraOpenBasis(state,owner){
+ const bases=state?.reconciliation?.positionBasis||{},list=[],p=E.portfolio(state,owner);
+ const ledger=E.ledger(state,owner);
+ for(const h of p.holdings){
+  const ref=bases[E.codeOf(h.code)];
+  if(!ref||ref.owner!==h.owner||!(Number(ref.unitCost)>0)||!(Number(ref.qty)>0)||
+   Math.abs(h.qty-Number(ref.qty))>0.00001||!['position','quote'].includes(h.origin)||h.group==='Tesouro')continue;
+  const current=ledger.stocks.get(h.owner+'|'+E.codeOf(h.code));
+  const reconciled=current&&!current.uncertain&&current.qty>0&&
+   Math.abs(current.qty-h.qty)<=Math.max(0.00001,0.002*h.qty);
+  if(!reconciled)list.push({code:h.code,owner:h.owner,gain:h.value-h.qty*Number(ref.unitCost)});
+ }
+ return list;
+}
 function audit(state,owner='family',period='all',today=E.isoNow()){
  const from=E.cutoff(period,today),owners=ownerSet(owner),all=getEntries(state);
  const selected=all.filter(x=>owners.includes(x.owner)&&x.date>=from&&x.date<=today);
@@ -69,7 +83,9 @@ E.gaps=function(state,owner='family',today=E.isoNow()){
  const revised=base.map(issue=>{
   if(issue.owner==='me'&&issue.code==='cost-reconcile'){
    const led=E.ledger(state,'me'),port=E.portfolio(state,'me');
+   const costFixed=new Set(extraOpenBasis(state,'me').map(x=>x.code));
    const entries=port.holdings.filter(h=>{
+    if(costFixed.has(h.code))return false;
     if(h.group==='Tesouro')return !(h.applied>0);
     if(h.origin!=='position'&&h.origin!=='quote')return true;
     const rec=led.stocks.get('me|'+E.codeOf(h.code));
@@ -88,7 +104,7 @@ E.gaps=function(state,owner='family',today=E.isoNow()){
    const words=explained.map(x=>x.code+': posição '+x.position+' e compra de '+x.bought+
       ' unidades em 28/10/2026, já registrada no histórico');
    if(irim)words.push('IRIM11: origem confirmada na liquidação de IRDM11 (82 cotas geraram 72 IRIM11 e fração leiloada); custo fiscal da reorganização precisa ser tratado separadamente');
-   return {...issue,level:'warning',code:'reconcile-position-timing',
+   return {...issue,level:unresolved.length?'warning':'info',code:'reconcile-position-timing',
     title:explained.length+' divergências de posição explicadas por compras recentes'+
       (unresolved.length?' e '+unresolved.length+' conversão(ões)/custo(s) ainda a calcular':''),
     why:'Não faltam comprovantes das compras recentes. '+words.join('. ')+'.',
@@ -126,7 +142,15 @@ E.gaps=function(state,owner='family',today=E.isoNow()){
 
 E.gains=function(state,owner='family',period='all',today=E.isoNow()){
  const base=originalGains(state,owner,period,today);
- if(!getEntries(state).some(x=>ownerSet(owner).includes(x.owner)))return base;
+ const added=extraOpenBasis(state,owner);
+ const addedGain=rounded(added.reduce((sum,x)=>sum+x.gain,0));
+ const missing=Math.max(0,base.missing-added.length),matched=base.matched+added.length;
+ const openGain=matched?rounded((base.openGain||0)+addedGain):null;
+ const openIncluded=period==='all'?rounded(base.openIncluded+addedGain):base.openIncluded;
+ if(!getEntries(state).some(x=>ownerSet(owner).includes(x.owner)))
+  return {...base,openGain,openIncluded,matched,missing,
+   profit:rounded(base.realized+base.dividends+openIncluded)};
+
  const a=audit(state,owner,period,today);
  const sales=a.sales.map(x=>a.overrides.has(x)?{...x,...a.overrides.get(x)}:x);
  const recognized=sales.filter(x=>x.recognized&&Number.isFinite(x.profit));
@@ -150,19 +174,24 @@ E.gains=function(state,owner='family',period='all',today=E.isoNow()){
  const parts=[];
  if(excluded.length)parts.push(excluded.length+' negociações sem custo confirmado foram excluídas do lucro.');
  if(a.unmatched)parts.push(a.unmatched+' conciliações não coincidiram com as negociações importadas.');
- if(base.missing){
+ if(missing){
   if(owner==='spouse'&&!state.spousePositionSnapshot?.rows?.length)
-   parts.push('Posição histórica de Jessica (31/12/2024) já recebida; sem posição atual, valorização em aberto de 2026 não apurada.');
-  else parts.push(base.missing+' posições abertas sem custo/preço suficiente.');
+   parts.push('A posição histórica da Jessica foi recebida; sem um valor de mercado atual, a valorização em aberto não pode ser concluída.');
+  else if(owner==='me'&&missing===2)
+   parts.push('BOVA11 e BEST11: as compras de 28/10/2026 estão no histórico, mas não na posição exportada. A avaliação dessas unidades permanece fora do lucro em aberto.');
+  else if(owner==='family')
+   parts.push('Avaliação familiar parcial: posição de Jessica histórica e compras recentes de BOVA11/BEST11 não refletidas no snapshot.');
+  else parts.push(missing+' posições abertas sem custo/preço suficiente.');
  }
  if(period!=='all')parts.push('Sem preço histórico, a valorização de posições abertas neste intervalo não é apurada.');
  if(remainingProblems.length)parts.push('Existem '+remainingProblems.length+' problemas históricos ainda não conciliados.');
- return{...base,unmatched:remainingProblems,realized,dividends,profit:rounded(realized+dividends+base.openIncluded),
+ return{...base,unmatched:remainingProblems,realized,dividends,openGain,openIncluded,matched,missing,
+  profit:rounded(realized+dividends+openIncluded),
   sales:recognized.length,totalSales:sales.length,excludedSales:excluded.length,
   excludedGross:excluded.reduce((total,x)=>total+x.gross,0),
   payments:payouts.length,monthly:[...monthly.values()].sort((x,y)=>x.month.localeCompare(y.month)),
-  complete:base.missing===0&&remainingProblems.length===0&&excluded.length===0&&a.unmatched===0&&a.provisional===0&&a.incomplete===0&&period==='all',
-  partial:!(base.missing===0&&remainingProblems.length===0&&excluded.length===0&&a.unmatched===0&&a.provisional===0&&a.incomplete===0&&period==='all'),warning:parts.join(' '),
+  complete:missing===0&&remainingProblems.length===0&&excluded.length===0&&a.unmatched===0&&a.provisional===0&&a.incomplete===0&&period==='all',
+  partial:!(missing===0&&remainingProblems.length===0&&excluded.length===0&&a.unmatched===0&&a.provisional===0&&a.incomplete===0&&period==='all'),warning:parts.join(' '),
   reconciliationVerified:a.verified,reconciliationProvisional:a.provisional,
   reconciliationIncomplete:a.incomplete,reconciliationUnmatched:a.unmatched};
 };
