@@ -126,10 +126,10 @@ function validRow(t,x){if(!validDate(x[t==='trade'?0:1]))return false;if(t==='tr
   return !!txt(x[2])&&!!txt(x[3])&&!!txt(x[4])&&['CREDITO','DEBITO'].includes(norm(x[0]));}
 function original(){return {v:3,records:SEED.rows.map((r,i)=>({...r,id:'seed'+i})),sources:SEED.files,targets:{...TARGET},goal:{...DEFAULT_GOAL},scenario:'high',classes:{},quotes:{},created:'2026-10-31'};}
 function load(){return original();}
-let S=load();let page='home',ui={kind:'trade',search:'',pageLimit:80,report:'',modal:null,portfolioFilter:'',period:'all'};
+let S=load();let page='home',ui={kind:'trade',search:'',pageLimit:80,report:'',modal:null,portfolioFilter:'',period:'all',owner:'me'};
 function save(){window.MoneyTrackerCloud?.scheduleSave?.(S);}
 function toast(msg,error=false){$('.toast')?.remove();const el=document.createElement('div');el.className='toast'+(error?' error':'');el.textContent=msg;el.setAttribute('role','status');document.body.appendChild(el);setTimeout(()=>el.remove(),5500);}
-function groupRecords(t){return S.records.filter(x=>x.t===t);}
+function groupRecords(t){return S.records.filter(x=>x.t===t&&(ui.owner==='family'||(x.owner||'me')===(ui.owner||'me')));}
 const header=t=>t==='trade'?NHEAD:MHEAD;
 function dateOf(r){return orderDate(r.v[r.t==='trade'?0:1]);}
 function currentMonth(){return new Date().toISOString().slice(0,7);}
@@ -151,7 +151,14 @@ function activity(){
   const incTotal=inc.reduce((s,r)=>s+num(r.v[7]),0);
   
   const historicalTotal=total;
-  const reported=S.positionSnapshot&&Array.isArray(S.positionSnapshot.rows)&&S.positionSnapshot.rows.length?S.positionSnapshot:null;
+  const own=ui.owner||'me';
+  const pMe=S.positionSnapshot?.rows?.length?S.positionSnapshot:null;
+  const pSp=S.spousePositionSnapshot?.rows?.length?S.spousePositionSnapshot:null;
+  const reported=own==='me'?pMe:own==='spouse'?pSp:(pMe||pSp)?{
+    date:pMe&&pSp?(pMe.date===pSp.date?pMe.date:'datas diferentes'):(pMe||pSp).date,
+    source:'Consolidado',rows:[...(pMe?.rows||[]).map(x=>({...x,owner:'me'})),...(pSp?.rows||[]).map(x=>({...x,owner:'spouse'}))],
+    total:Number(pMe?.total||0)+Number(pSp?.total||0),partial:!(pMe&&pSp)
+  }:null;
   if(reported){
     holdings=reported.rows.filter(r=>Number.isFinite(Number(r.value))&&Number(r.value)>=0).map(r=>{
       const code=r.group==='Tesouro Direto'?r.product:(r.code||r.product);
@@ -226,10 +233,11 @@ function coverageFlag(){
 }
 function filesPage(){const sources=Object.entries(S.sources||{}),tCount=groupRecords('trade').length,mCount=groupRecords('mov').length;return `<div class="stack">${S.positionSnapshot?.rows?.length?box(`<div class="section"><h2>Última posição B3</h2><span class="chip">${S.positionSnapshot.rows.length} posições</span></div><div class="kpi"><div class="num">${money(S.positionSnapshot.total)}</div><p class="small muted">${h(S.positionSnapshot.source)} · ${h(S.positionSnapshot.date.split('-').reverse().join('/'))} · não são cotações em tempo real</p></div>`):''}${coverageAudit()}${box(`<div class="section"><h2>Importar arquivos da B3</h2><span class="chip">XLSX · até 20 MB</span></div><div class="uploader" id="drop-zone"><div class="large">⇧</div><h3>Selecione ou arraste suas planilhas</h3><p>Negociação (9 colunas), Movimentação (8 colunas) ou Posição (ETF, fundos e Tesouro). A Posição substitui a fotografia anterior sem duplicar investimentos.</p><button class="btn" data-act="open-import">Selecionar arquivos .xlsx</button></div><div class="notice good" style="margin-top:15px"><b>Deduplicação automática:</b> compara todos os campos do tipo correspondente, inclusive data, instituição, quantidade, preço, valor e ativo. Um registro idêntico já existente não entra novamente.</div>${ui.report?`<div class="sheet-detail" style="margin-top:15px;white-space:pre-wrap">${h(ui.report)}</div>`:''}`)}<div class="grid g2">${box(`<div class="section"><h2>Exportar negociação</h2><span class="chip">${nfmt(tCount,0)} registros</span></div><p class="small muted">Gera Excel com aba <b>Negociação</b> e as mesmas 9 colunas dos arquivos que você enviou, incluindo lançamentos manuais.</p><button class="btn" data-act="export-trade">⇩ Exportar negociação.xlsx</button>`)}${box(`<div class="section"><h2>Exportar movimentação</h2><span class="chip">${nfmt(mCount,0)} registros</span></div><p class="small muted">Gera Excel com aba <b>Movimentação</b> e as mesmas 8 colunas dos arquivos originais, incluindo lançamentos manuais.</p><button class="btn" data-act="export-mov">⇩ Exportar movimentacao.xlsx</button>`)}</div>${box(`<div class="section"><h2>Arquivos incorporados na criação</h2><span class="chip gray">${sources.length} arquivos</span></div><div class="list">${sources.map(([f,v])=>`<div class="statrow"><div style="min-width:0"><div class="name" style="word-break:break-all">${h(f)}</div><div class="desc">${v.type==='position'?'Posição B3':v.type==='trade'?'Negociação':'Movimentação'} · ${v.accepted} incorporados</div></div>${v.skipped?`<span class="chip amber">${v.skipped} repetidos</span>`:'<span class="chip">OK</span>'}</div>`).join('')||'<p class="muted small">Nenhum arquivo listado.</p>'}</div>`)}${box(`<div class="section"><h2>Backup e gerenciamento</h2></div><div class="row wrap"><button class="btn outline" data-act="backup">⇩ Backup completo (.json)</button><button class="btn outline" data-act="import-backup">⇧ Restaurar backup (.json)</button><button class="btn danger" data-act="clear">Apagar registros</button></div><p class="help" style="margin-top:15px">Os Excel exportados seguem o formato de colunas da B3. O JSON salva também o último relatório de Posição, metas e classificações. A sincronização usa sua conta no Supabase, mas recomenda-se guardar backups periódicos.</p>`)} </div>`;}
 function v2nav(){return [['home','⌂','Início'],['portfolio','▤','Carteira'],['income','◷','Proventos'],['ai','✧','Insights'],['more','☰','Mais']]}
+function v3ownerPicker(){const chosen=ui.owner||'me';return `<div class="v3ownerpicker" role="group" aria-label="Carteira visualizada">${[['me','Minha'],['spouse','Esposa'],['family','Família']].map(([id,title])=>`<button type="button" data-owner="${id}" class="${chosen===id?'active':''}">${title}</button>`).join('')}</div>`;}
 function v2layout(content){
 const pages={home:'Início',portfolio:'Minha carteira',asset:'Detalhes do ativo',income:'Proventos',ai:'Seus insights',files:'Atualizar dados',records:'Histórico',goals:'Meu objetivo',strategy:'Alocação',scenarios:'Cenários',more:'Mais'};
 const nav=v2nav();
-return `<div class="v2shell"><aside class="v2side"><div class="v2logo"><i>↗</i>money<b>tracker</b></div><nav class="v2nav">${nav.map(([id,ico,label])=>`<button data-page="${id}" class="${page===id?'active':''}"><span class="v2ni">${ico}</span>${label}</button>`).join('')}</nav><div style="margin-top:auto;font-size:11px;color:#8b9990">Sua carteira B3 · Privada</div></aside><main class="v2main"><header class="v2head"><div><small>${page==='home'?'Seu patrimônio em um só lugar':'MoneyTracker'}</small><div class="v2titleline">${!nav.some(n=>n[0]===page)?'<button class="v2back" data-act="v2-back">‹</button>':''}<h1>${pages[page]||'MoneyTracker'}</h1></div></div><div style="display:flex;align-items:center;gap:8px"><div id="mt-cloud-holder"></div><button class="v2user" data-page="more" aria-label="Conta">S</button></div></header><div class="v2content">${content}</div></main><nav class="v2bottom">${nav.map(([id,ico,label])=>`<button data-page="${id}" class="${page===id?'active':''}"><b>${ico}</b>${label}</button>`).join('')}</nav></div>`;
+return `<div class="v2shell"><aside class="v2side"><div class="v2logo"><i>↗</i>money<b>tracker</b></div><nav class="v2nav">${nav.map(([id,ico,label])=>`<button data-page="${id}" class="${page===id?'active':''}"><span class="v2ni">${ico}</span>${label}</button>`).join('')}</nav><div style="margin-top:auto;font-size:11px;color:#8b9990">Sua carteira B3 · Privada</div></aside><main class="v2main"><header class="v2head"><div><small>${page==='home'?'Seu patrimônio em um só lugar':'MoneyTracker'}</small><div class="v2titleline">${!nav.some(n=>n[0]===page)?'<button class="v2back" data-act="v2-back">‹</button>':''}<h1>${pages[page]||'MoneyTracker'}</h1></div></div><div style="display:flex;align-items:center;gap:8px"><div id="mt-cloud-holder"></div><button class="v2user" data-page="more" aria-label="Conta">S</button></div></header>${v3ownerPicker()}<div class="v2content">${content}</div></main><nav class="v2bottom">${nav.map(([id,ico,label])=>`<button data-page="${id}" class="${page===id?'active':''}"><b>${ico}</b>${label}</button>`).join('')}</nav></div>`;
 }
 function v2date(d){return d?String(d).split('-').reverse().join('/'):'—'}
 function v2pct(n,total){return total?pcent(n/total*100):'0%'}
@@ -257,12 +265,12 @@ return `<section class="v2hero"><div class="v2kicker">Total em carteira</div><di
 }
 function v2asset(D){
 const r=D.holdings.find(x=>x.code===ui.selectedAsset);if(!r)return '<section class="v2panel">Ativo não encontrado.</section>';
-const ops=S.records.filter(x=>norm(x.v.join(' ')).includes(norm(r.code))).sort((a,b)=>dateOf(b).localeCompare(dateOf(a))).slice(0,10);
+const ops=S.records.filter(x=>(ui.owner==='family'||(x.owner||'me')===(ui.owner||'me'))&&norm(x.v.join(' ')).includes(norm(r.code))).sort((a,b)=>dateOf(b).localeCompare(dateOf(a))).slice(0,10);
 return `<section class="v2hero"><div class="v2kicker">${h(r.product||r.code)}</div><div style="margin-top:12px;font-size:12px;color:#cee9de">Valor da posição ${r.reported?'B3':'estimado'}</div><div class="v2money">${money(r.cost)}</div><div class="v2mini"><span>${nfmt(r.qty,5)} un.</span><span>${D.reported?v2date(D.reported.date):'Histórico'}</span></div></section><div class="v2kpirow"><div class="v2stat"><small>Quantidade</small><strong>${nfmt(r.qty,5)}</strong></div><div class="v2stat"><small>Por unidade</small><strong>${money(r.pm)}</strong></div><div class="v2stat"><small>Na carteira</small><strong>${v2pct(r.cost,D.total)}</strong></div></div><section class="v2panel"><div class="v2section"><h2>Operações identificadas</h2><button data-page="records">Histórico ›</button></div>${ops.map(x=>`<div class="v2row"><span class="v2bubble">${x.t==='trade'?'⇄':'◷'}</span><span class="v2rowinfo"><b>${h(x.t==='trade'?x.v[1]:x.v[2])}</b><small>${v2date(dateOf(x))}</small></span><span class="v2rowright"><strong>${money(num(x.v[x.t==='trade'?8:7]))}</strong></span></div>`).join('')||'<div class="v2empty">Sem operações associadas ao código.</div>'}</section><div class="v2quick"><button class="v2btn" data-act="add-trade">＋ Negociação</button><button class="v2btn outline" data-page="portfolio">Voltar à carteira</button></div>`;
 }
 function v2income(D){
 const types=['DIVIDENDO','RENDIMENTO','JUROS SOBRE CAPITAL PROPRIO'];
-const mov=S.records.filter(r=>r.t==='mov'&&norm(r.v[0])==='CREDITO'&&types.includes(norm(r.v[2]))&&Number.isFinite(num(r.v[7]))).sort((a,b)=>dateOf(b).localeCompare(dateOf(a)));
+const mov=groupRecords('mov').filter(r=>norm(r.v[0])==='CREDITO'&&types.includes(norm(r.v[2]))&&Number.isFinite(num(r.v[7]))).sort((a,b)=>dateOf(b).localeCompare(dateOf(a)));
 const years=[...new Set([String(new Date().getFullYear()),...mov.map(r=>dateOf(r).slice(0,4))])].sort((a,b)=>b.localeCompare(a));
 const year=ui.incomeYear||String(new Date().getFullYear()),rows=mov.filter(r=>dateOf(r).startsWith(year));
 const amount=rows.reduce((n,r)=>n+num(r.v[7]),0),months=new Map();
@@ -278,7 +286,7 @@ const p=D.reported;
 return `<section class="v2panel"><div class="v2upload" id="drop-zone"><div style="font-size:35px;color:#0c805d">⇧</div><strong>Importar arquivo Excel</strong><p class="v2muted" style="margin-bottom:18px">Negociações, movimentações ou posição atual.</p><button class="v2btn" data-act="open-import">Selecionar .xlsx</button></div><p class="v2note">Duplicados não são adicionados novamente.</p>${ui.report?`<div class="v2callout" style="margin-top:16px;white-space:pre-line">${h(ui.report)}</div>`:''}</section><section class="v2panel"><div class="v2section"><h2>Como funciona?</h2></div>${[['1','Negociação','Compras e vendas'],['2','Movimentação','Proventos e eventos'],['3','Posição','Atualiza patrimônio sem somar compras novamente']].map(([a,b,c])=>`<div class="v2row"><span class="v2bubble">${a}</span><span class="v2rowinfo"><b>${b}</b><small>${c}</small></span></div>`).join('')}</section><section class="v2panel"><div class="v2section"><h2>Última posição B3</h2></div><div class="v2value">${p?money(p.total):'—'}</div><p class="v2muted">${p?p.rows.length+' posições · '+v2date(p.date):'Sem posição'}</p></section><section class="v2panel"><div class="v2section"><h2>Backup e exportação</h2></div><div class="v2quick"><button class="v2btn" data-act="backup">Backup completo</button><button class="v2btn outline" data-act="import-backup">Restaurar JSON</button><button class="v2btn outline" data-act="export-trade">Excel negociação</button><button class="v2btn outline" data-act="export-mov">Excel movimentação</button></div></section>`;
 }
 function v2records(D){
-const t=ui.kind||'trade';let records=S.records.filter(x=>x.t===t&&(!ui.search||norm(x.v.join(' ')).includes(norm(ui.search)))).sort((a,b)=>dateOf(b).localeCompare(dateOf(a)));
+const t=ui.kind||'trade';let records=groupRecords(t).filter(x=>!ui.search||norm(x.v.join(' ')).includes(norm(ui.search))).sort((a,b)=>dateOf(b).localeCompare(dateOf(a)));
 return `<div class="v2summary"><div class="v2stat"><small>Negociações</small><strong>${D.counts.trade}</strong></div><div class="v2stat"><small>Movimentações</small><strong>${D.counts.mov}</strong></div><div class="v2stat"><small>Total</small><strong>${S.records.length}</strong></div></div><section class="v2panel"><div class="v2section"><h2>Pesquisar</h2><button data-page="files">Importar ›</button></div><div class="v2filter"><button data-kind="trade" class="${t==='trade'?'selected':''}">Negociações</button><button data-kind="mov" class="${t==='mov'?'selected':''}">Movimentações</button></div><input class="v2field" style="margin-top:12px" id="search" placeholder="Buscar ativo ou data" value="${h(ui.search)}"></section><section class="v2panel"><div class="v2section"><h2>Atividade</h2><span class="v2chip">${records.length} registros</span></div><div class="v2list">${records.slice(0,ui.pageLimit||80).map(r=>`<div class="v2row"><span class="v2bubble">${t==='trade'?'⇄':'◷'}</span><span class="v2rowinfo"><b>${h(r.v[t==='trade'?5:3])}</b><small>${h(r.v[t==='trade'?1:2])} · ${v2date(dateOf(r))}</small></span><span class="v2rowright"><strong>${money(num(r.v[t==='trade'?8:7]))}</strong><small><button class="muted-link" data-edit="${h(r.id)}">Editar</button></small></span></div>`).join('')||'<div class="v2empty">Nenhum registro.</div>'}</div>${records.length>(ui.pageLimit||80)?'<button class="v2btn outline" data-act="show-more">Mostrar mais</button>':''}</section><div class="v2quick"><button class="v2btn" data-act="add-trade">＋ Negociação</button><button class="v2btn outline" data-act="add-mov">＋ Movimentação</button></div>`;
 }
 function v2more(D){
@@ -332,7 +340,7 @@ function parsePositionSheet(rows){
 }
 async function importExcel(files){
  let count=0,dups=0,invalid=0,positionCount=0,details=[];
- const known=new Set(S.records.map(r=>fingerprint(r.t,r.v)));
+ const owner=ui.owner||'me';if(owner==='family'){toast('Escolha Minha ou Esposa antes de importar.',true);return;}const known=new Set(S.records.filter(r=>(r.owner||'me')===owner).map(r=>fingerprint(r.t,r.v)));
  for(const file of Array.from(files)){
   if(!/\.xlsx$/i.test(file.name)){details.push(file.name+': somente XLSX.');continue;}
   try{
@@ -358,18 +366,23 @@ async function importExcel(files){
       if(!r||!r.some(v=>txt(v)))continue;
       const v=canon(kind,r);if(!validRow(kind,v)){bad++;continue;}
       const key=fingerprint(kind,v);if(known.has(key)){skip++;continue;}
-      known.add(key);S.records.push({t:kind,v,id:'i'+uid(),source:file.name});added++;
+      known.add(key);S.records.push({t:kind,v,id:'i'+uid(),source:file.name,owner});added++;
     }
    }
    if(!recognized)throw Error('Formato B3 não identificado (Negociação, Movimentação ou Posição).');
    if(positions.length){
     const total=Math.round(positions.reduce((sum,r)=>sum+r.value,0)*100)/100;
-    S.positionSnapshot={date:new Date().toISOString().slice(0,10),source:file.name,rows:positions,total};
-    S.sources[file.name]={type:'position',accepted:positions.length,skipped:skip};
+    const snap={date:new Date().toISOString().slice(0,10),source:file.name,rows:positions,total};
+    if(owner==='spouse')S.spousePositionSnapshot=snap;else S.positionSnapshot=snap;
+    if(!Array.isArray(S.positionHistory))S.positionHistory=[];
+    S.positionHistory=S.positionHistory.filter(x=>!(x.owner===owner&&x.date===snap.date));
+    S.positionHistory.push({date:snap.date,owner,total,source:file.name});
+    S.positionHistory.sort((a,b)=>a.date.localeCompare(b.date));
+    S.sources[(owner==='spouse'?'Esposa · ':'Minha · ')+file.name]={type:'position',owner,accepted:positions.length,skipped:skip};
     positionCount+=positions.length;
     details.push(file.name+': posição atualizada — '+positions.length+' itens, '+money(total)+'.');
    }else{
-    S.sources[file.name]={type:file.name.toLowerCase().includes('movimentacao')?'mov':'trade',accepted:added,skipped:skip};
+    S.sources[(owner==='spouse'?'Esposa · ':'Minha · ')+file.name]={type:file.name.toLowerCase().includes('movimentacao')?'mov':'trade',owner,accepted:added,skipped:skip};
     details.push(file.name+': '+added+' novos, '+skip+' duplicados, '+bad+' inválidos.');
    }
    count+=added;dups+=skip;invalid+=bad;
@@ -383,8 +396,8 @@ async function importExcel(files){
 function download(blob,name){const link=document.createElement('a'),url=URL.createObjectURL(blob);link.href=url;link.download=name;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);}
 function exportSheet(t){const rows=groupRecords(t).slice().sort((a,b)=>dateOf(b).localeCompare(dateOf(a))).map(r=>r.v);const title=t==='trade'?'Negociação':'Movimentação',file=t==='trade'?'negociacao':'movimentacao';const blob=Excel.create(title,[header(t),...rows]);download(blob,`${file}-moneytracker-${new Date().toISOString().slice(0,10)}.xlsx`);toast(`Exportados ${rows.length} registros de ${title} no formato B3.`);}
 function addManual(e){e.preventDefault();const form=e.target,t=ui.modal.t,record=ui.modal.id?S.records.find(r=>r.id===ui.modal.id):null;const data=new FormData(form);let row=header(t).map((_,i)=>data.get('f'+i));const dt=t==='trade'?0:1;row[dt]=dbr(row[dt]);row=canon(t,row);if(!validRow(t,row)){toast('Preencha data, ativo/produto, instituição e os campos obrigatórios.',true);return;}
-  const key=fingerprint(t,row),found=S.records.find(r=>r.id!==record?.id&&fingerprint(r.t,r.v)===key);if(found){toast('Registro duplicado: já existe uma linha com os mesmos dados. Nada foi inserido.',true);return;}
-  if(record){record.v=row;record.source='Editado no aplicativo';}else S.records.push({t,v:row,id:'m'+uid(),source:'Lançamento manual'});
+  const owner=record?.owner||ui.owner||'me';if(owner==='family'){toast('Selecione Minha ou Esposa para lançar.',true);return;}const key=fingerprint(t,row),found=S.records.find(r=>r.id!==record?.id&&(r.owner||'me')===owner&&fingerprint(r.t,r.v)===key);if(found){toast('Registro duplicado: já existe uma linha com os mesmos dados. Nada foi inserido.',true);return;}
+  if(record){record.v=row;record.source='Editado no aplicativo';}else S.records.push({t,v:row,id:'m'+uid(),source:'Lançamento manual',owner});
   save();ui.modal=null;$('.modal-bg')?.remove();page='records';ui.kind=t;render();toast(record?'Registro atualizado.':'Registro manual adicionado.');}
 function backup(){download(new Blob([JSON.stringify({format:'moneytracker-backup',date:new Date().toISOString(),data:S},null,2)],{type:'application/json'}),'moneytracker-backup-'+new Date().toISOString().slice(0,10)+'.json');}
 async function restoreBackup(file){try{const obj=JSON.parse(await file.text());if(obj.format!=='moneytracker-backup'||obj.data?.v!==3||!Array.isArray(obj.data.records))throw Error('Backup não reconhecido.');
@@ -392,6 +405,7 @@ async function restoreBackup(file){try{const obj=JSON.parse(await file.text());i
     if(!confirm(`Substituir seus ${S.records.length} registros pelos ${records.length} do backup? Faça um backup antes, se necessário.`))return;
     S={...original(),...obj.data,records,targets:{...TARGET,...obj.data.targets},goal:{...DEFAULT_GOAL,...obj.data.goal}};save();page='home';render();toast('Backup restaurado, sem registros repetidos.');}catch(e){toast('Falha ao restaurar backup: '+e.message,true);}}
 function dispatch(e){
+  const ownerClick=e.target.closest('[data-owner]');if(ownerClick){ui.owner=ownerClick.dataset.owner;ui.portfolioFilter='';ui.search='';render();return;}
   const asset=e.target.closest('[data-asset]');if(asset){ui.selectedAsset=asset.dataset.asset;page='asset';window.scrollTo(0,0);render();return;}
   const cat=e.target.closest('[data-v2-filter]');if(cat){ui.portfolioFilter=cat.dataset.v2Filter;ui.pageLimit=80;render();return;}
   const yr=e.target.closest('[data-income-year]');if(yr){ui.incomeYear=yr.dataset.incomeYear;render();return;}
@@ -402,7 +416,7 @@ function dispatch(e){
   const edit=e.target.closest('[data-edit]');if(edit){const r=S.records.find(x=>x.id===edit.dataset.edit);if(r){ui.modal={t:r.t,id:r.id};renderModal();}return;}
   const del=e.target.closest('[data-delete]');if(del){const r=S.records.find(x=>x.id===del.dataset.delete);if(r&&confirm('Excluir definitivamente este registro?')){S.records=S.records.filter(x=>x.id!==r.id);save();render();toast('Registro excluído.');}return;}
   const a=e.target.closest('[data-act]');if(!a)return;const act=a.dataset.act;
-  if(act==='open-import'){$('#file-input').click();return;}if(act==='add-trade'||act==='add-mov'){ui.modal={t:act==='add-mov'?'mov':'trade'};renderModal();return;}
+  if(act==='open-import'){if(ui.owner==='family'){toast('Selecione Minha ou Esposa para importar os dados separados.',true);return;}$('#file-input').click();return;}if(act==='add-trade'||act==='add-mov'){ui.modal={t:act==='add-mov'?'mov':'trade'};renderModal();return;}
   if(act==='close-modal'){ui.modal=null;$('.modal-bg')?.remove();return;}
   if(act==='show-more'){ui.pageLimit+=80;render();return;}
   if(act==='export-trade'||act==='export-mov'){exportSheet(act==='export-trade'?'trade':'mov');return;}
