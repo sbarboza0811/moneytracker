@@ -5,7 +5,7 @@ const $=id=>document.getElementById(id);
 let client=null,currentUser=null,saveTimer=null,saving=false,queued=null,saveFailed=false;
 const status=(s)=>{const x=$('mt-cloud-status');if(x)x.textContent=s;};
 const message=(s)=>{const x=$('mt-auth-status');if(x)x.textContent=s;};
-function showLogin(info){const form=$('mt-auth-form');if(form)form.classList.add('mt-auth-ready');if(info)message(info);}
+function showLogin(info){const form=$('mt-auth-form');if(form)form.classList.add('mt-auth-ready');const description=$('mt-auth-info');if(description)description.textContent='Entre para acessar seus investimentos.';if(info)message(info);}
 function lock(){ $('mt-auth-gate').hidden=false;$('mt-cloud-bar').hidden=true;currentUser=null;showLogin(); }
 function unlock(){ $('mt-auth-gate').hidden=true;$('mt-cloud-bar').hidden=false; }
 const valid=v=>v&&v.v===3&&Array.isArray(v.records);
