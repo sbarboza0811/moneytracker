@@ -91,14 +91,14 @@ function ledger(state,owner='family'){
    if(d&&['COMPRA','VENDA'].includes(act))items.push({kind:'trade',r,owner:o,date:d,priority:act==='COMPRA'?1:2});
   }else if(r.t==='mov'){
    const d=recordDate(r),ev=norm(r.v[2]),dir=norm(r.v[0]);
-   if(d&&dir==='CREDITO'&&['DESDOBRO','BONIFICACAO EM ATIVOS','GRUPAMENTO','INCORPORACAO'].includes(ev))
+   if(d&&((dir==='CREDITO'&&['DESDOBRO','BONIFICACAO EM ATIVOS','GRUPAMENTO','INCORPORACAO','LEILAO DE FRACAO'].includes(ev))||(dir==='DEBITO'&&ev==='FRACAO EM ATIVOS')))
     items.push({kind:'event',r,owner:o,date:d,event:ev,priority:0});
   }
  }
  // B3 Excel does not provide intraday execution times. Same-day buys precede
  // sales; the result is a gross investment estimate, not a day-trade tax calculation.
  items.sort((a,b)=>a.date.localeCompare(b.date)||a.priority-b.priority);
- const stocks=new Map(),sales=[],problems=[],adjustments=[];
+ const stocks=new Map(),sales=[],problems=[],adjustments=[],pendingFractions=new Map();
  const get=(o,c)=>{
   const key=o+'|'+c;
   if(!stocks.has(key))stocks.set(key,{owner:o,code:c,qty:0,cost:0,unmatched:0,qtyPurchased:0,buys:0,uncertain:false});
@@ -109,24 +109,52 @@ function ledger(state,owner='family'){
   const c=item.kind==='trade'?codeOf(r.v[5]):codeOf(tidy(r.v[3]).split(' - ')[0]);
   if(!c)continue;
   const p=get(o,c),qty=number(r.v[item.kind==='trade'?6:5]);
-  if(!(qty>0)||!Number.isFinite(qty))continue;
   if(item.kind==='event'){
-   const before=p.qty;
-   if(item.event==='DESDOBRO'){
+   const before=p.qty,key=o+'|'+c;
+   if(item.event==='LEILAO DE FRACAO'){
+    const payout=number(r.v[7]),pending=pendingFractions.get(key);
+    let amount=Number.isFinite(qty)&&qty>0?qty:0,basis=0,uncertain=p.uncertain;
+    if(pending){
+     amount=pending.qty;basis=pending.cost;uncertain=uncertain||pending.uncertain;
+     pendingFractions.delete(key);
+    }else{
+     // Some B3 exports report quantity zero for fractional auctions.
+     // Use only the outstanding fractional part; never invent whole shares.
+     amount=amount||Math.max(0,p.qty-Math.floor(p.qty+1e-8));
+     if(amount>0&&p.qty>0){
+      const covered=Math.min(amount,p.qty);
+      basis=p.cost*covered/p.qty;p.cost=Math.max(0,p.cost-basis);
+      p.qty=Math.max(0,p.qty-covered);
+     }else amount=0;
+    }
+    if(amount>0&&Number.isFinite(payout)&&payout>=0){
+     const valid=!uncertain&&before>0;
+     sales.push({owner:o,code:c,date,profit:valid?payout-basis:null,
+       recognized:valid,uncertain:!valid,covered:amount,qty:amount,gross:payout,
+       unmatched:false,reason:valid?'':'Leilão de fração com custo atribuído não confirmado'});
+     if(!valid)problems.push({owner:o,code:c,date,qty:amount,reason:'Fração em leilão sem custo conhecido'});
+    }
+    if(p.qty<1e-8){p.qty=0;p.cost=0;p.uncertain=false;}
+    adjustments.push({owner:o,code:c,date,type:item.event,qty:amount,before,after:p.qty,uncertain});
+    continue;
+   }
+   if(!(qty>0)||!Number.isFinite(qty))continue;
+   if(item.event==='FRACAO EM ATIVOS'){
+    const covered=Math.min(qty,Math.max(0,p.qty)),basis=p.qty>0?p.cost*covered/p.qty:0;
+    if(covered){p.cost=Math.max(0,p.cost-basis);p.qty=Math.max(0,p.qty-covered);}
+    pendingFractions.set(key,{qty:covered||qty,cost:basis,uncertain:p.uncertain||covered<qty});
+   }else if(item.event==='DESDOBRO'){
     p.qty+=qty;
-    // Splits add units without additional acquisition cost.
     if(before<=0)p.uncertain=true;
    }else if(item.event==='GRUPAMENTO'){
-    // B3 credits the new total after grouping, not the quantity to add.
     p.qty=qty;if(before<=0)p.uncertain=true;
    }else{
-    // Bonuses and incorporations have tax acquisition bases not in this B3 XLSX.
-    // Include units but withhold profits until the attributed cost is verified.
     p.qty+=qty;p.uncertain=true;
    }
    adjustments.push({owner:o,code:c,date,type:item.event,qty,before,after:p.qty,uncertain:p.uncertain});
    continue;
   }
+  if(!(qty>0)||!Number.isFinite(qty))continue;
   const value=number(r.v[8]),action=norm(r.v[1]);
   if(!(value>=0)||!Number.isFinite(value))continue;
   if(action==='COMPRA'){
