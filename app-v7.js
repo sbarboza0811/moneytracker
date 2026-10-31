@@ -331,7 +331,7 @@ function needs(){
  '<span class="mt7-pill '+(issue.level==='critical'?'bad':issue.level==='warning'?'warn':'')+'">'+(issue.level==='critical'?'Prioritário':issue.level==='warning'?'Conferir':'Informação')+'</span>'+
  '<h3 style="margin-top:10px">'+esc(issue.title)+'</h3><p>'+esc(issue.why)+'</p>'+
  '<div class="action"><b>O que buscar</b><p>'+esc(issue.action)+'</p></div>'+
- '<button class="mt7-smalllink" data-nav="import">Importar B3 ›</button></article>').join('')+'</section>'+
+ '</article>').join('')+'</section>'+
  card(titlebar('Onde obter os documentos')+
  '<p>Na <a href="https://www.b3.com.br/pt_br/produtos-e-servicos/central-depositaria/canal-com-investidores/area-do-investidor/" target="_blank" rel="noopener noreferrer">Área do Investidor da B3 ↗</a>, entre com a conta do titular e acesse os extratos <b>Posição</b>, <b>Negociação</b> e <b>Movimentação</b>. Exporte no formato Excel (.xlsx).</p>'+
  '<p>Para transferências entre corretoras e bancos ou operações que não estão na B3, consulte também o histórico da XP, Inter e seus bancos.</p>')+
