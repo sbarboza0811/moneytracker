@@ -1,0 +1,324 @@
+(function(root){
+'use strict';
+const NHEAD=['Data do Negócio','Tipo de Movimentação','Mercado','Prazo/Vencimento','Instituição','Código de Negociação','Quantidade','Preço','Valor'];
+const MHEAD=['Entrada/Saída','Data','Movimentação','Produto','Instituição','Quantidade','Preço unitário','Valor da Operação'];
+const ETF=new Set(('BOVA11 BOVV11 DIVO11 PIBB11 IBOV11 WRLD11 IVVB11 BEST11 NASD11 TECK11 CHIP11 GOLD11 SPXI11 ACWI11 TECK11 LFTS11 HASH11 BITH11').split(' '));
+const LABELS={me:'Minha carteira',spouse:'Carteira da esposa',family:'Família'};
+const MONEY=new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
+const tidy=s=>String(s??'').trim();
+const norm=s=>tidy(s).normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').replace(/[–—]/g,'-');
+const number=x=>{
+ if(typeof x==='number')return Number.isFinite(x)?x:NaN;
+ let s=tidy(x).replace(/R\$/gi,'').replace(/\s/g,'');if(!s||s==='-')return NaN;
+ if(s.includes(',')&&s.includes('.'))s=s.replace(/\./g,'').replace(',','.');
+ else if(s.includes(','))s=s.replace(',','.');
+ return Number(s);
+};
+const money=x=>MONEY.format(Number(x)||0);
+const fmt=x=>new Intl.NumberFormat('pt-BR',{maximumFractionDigits:5}).format(Number(x)||0);
+const dateISO=value=>{
+ if(typeof value==='number'&&value>=1&&value<100000){const d=new Date(Date.UTC(1899,11,30)+Math.round(value)*86400000);return d.toISOString().slice(0,10);}
+ const s=tidy(value),iso=s.match(/^(\d{4})-(\d\d)-(\d\d)/);if(iso)return iso[0];
+ const br=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);return br?br[3]+'-'+br[2].padStart(2,'0')+'-'+br[1].padStart(2,'0'):'';
+};
+const dateBR=value=>{const d=dateISO(value);return d?d.slice(8,10)+'/'+d.slice(5,7)+'/'+d.slice(0,4):'';};
+const isoNow=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+const cutoff=(period,today=isoNow())=>{
+ if(period==='all')return'0000-01-01';
+ const d=new Date(today+'T12:00:00');
+ if(period==='30')d.setDate(d.getDate()-29);
+ else if(period==='90')d.setDate(d.getDate()-89);
+ else if(period==='1y')d.setFullYear(d.getFullYear()-1);
+ else if(period==='5y')d.setFullYear(d.getFullYear()-5);
+ else return'0000-01-01';
+ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+};
+const periodLabel={30:'30 dias',90:'90 dias','1y':'1 ano','5y':'5 anos',all:'Todo o histórico'};
+const codeOf=raw=>norm(raw).replace(/^(.*\d)F$/,'$1');
+function classify(code,group){
+ const c=codeOf(code),g=norm(group);
+ if(g.includes('TESOURO'))return'Tesouro';
+ if(g.includes('FUNDO DE INVESTIMENTO'))return'Fundos';
+ if(ETF.has(c))return'ETF';
+ if(/11$/.test(c))return'FII';
+ if(/\d{1,2}$/.test(c))return'Ações / BDRs';
+ return'Outros';
+}
+const ownerOf=x=>x==='spouse'?'spouse':'me';
+const recordDate=r=>dateISO(r.t==='trade'?r.v[0]:r.v[1]);
+function cleanRow(kind,row){
+ const n=kind==='trade'?9:8;
+ let out=Array.from(row||[]).slice(0,n);
+ while(out.length<n)out.push('');
+ const dt=kind==='trade'?0:1;out[dt]=dateBR(out[dt]);
+ for(const i of kind==='trade'?[6,7,8]:[5,6,7]){const val=number(out[i]);out[i]=Number.isFinite(val)?Math.round(val*1e8)/1e8:tidy(out[i]);}
+ return out.map(x=>typeof x==='string'?x.trim():x);
+}
+function rowValid(kind,row){
+ const d=recordDate({t:kind,v:row});if(!/^\d{4}-\d\d-\d\d$/.test(d))return false;
+ if(kind==='trade')return['COMPRA','VENDA'].includes(norm(row[1]))&&!!tidy(row[4])&&!!tidy(row[5])&&number(row[6])>0&&number(row[8])>=0;
+ return['CREDITO','DEBITO'].includes(norm(row[0]))&&!!tidy(row[2])&&!!tidy(row[3])&&!!tidy(row[4]);
+}
+function fingerprint(t,row,owner){
+ return ownerOf(owner)+'|'+t+'|'+row.map((x,i)=>{
+  if((t==='trade'?[6,7,8]:[5,6,7]).includes(i)){const n=number(x);return Number.isFinite(n)?String(+n.toFixed(8)):norm(x);}
+  if(i===(t==='trade'?0:1))return dateISO(x);
+  return norm(x);
+ }).join('\u001f');
+}
+function newState(){
+ return{v:3,records:[],sources:{},classes:{},quotes:{},positionHistory:[],positionSnapshot:null,spousePositionSnapshot:null,positionParts:{},created:isoNow()};
+}
+function normalizeState(raw){
+ const s=raw&&typeof raw==='object'?raw:{};
+ const out={...newState(),...s,v:3};
+ out.records=Array.isArray(s.records)?s.records.filter(r=>['trade','mov'].includes(r?.t)&&Array.isArray(r?.v)).map(r=>({...r,owner:ownerOf(r.owner)})):[];
+ out.positionHistory=Array.isArray(s.positionHistory)?s.positionHistory:[];
+ out.positionParts=s.positionParts&&typeof s.positionParts==='object'?s.positionParts:{};
+ out.sources=s.sources&&typeof s.sources==='object'?s.sources:{};
+ out.quotes=s.quotes&&typeof s.quotes==='object'?s.quotes:{};
+ return out;
+}
+function ledger(state,owner='family'){
+ const owners=owner==='family'?['me','spouse']:[ownerOf(owner)];
+ const rows=(state.records||[]).filter(r=>r.t==='trade'&&owners.includes(ownerOf(r.owner))).slice().sort((a,b)=>recordDate(a).localeCompare(recordDate(b)));
+ const stocks=new Map(),sales=[],problems=[];
+ for(const r of rows){
+  const c=codeOf(r.v[5]),o=ownerOf(r.owner),q=number(r.v[6]),value=number(r.v[8]),act=norm(r.v[1]),date=recordDate(r);
+  if(!c||!date||!Number.isFinite(q)||!(q>0)||!Number.isFinite(value)||value<0)continue;
+  const key=o+'|'+c;if(!stocks.has(key))stocks.set(key,{owner:o,code:c,qty:0,cost:0,unmatched:0,qtyPurchased:0,buys:0});
+  const p=stocks.get(key);
+  if(act==='COMPRA'){p.qty+=q;p.cost+=value;p.buys++;p.qtyPurchased+=q;}
+  else if(act==='VENDA'){
+   const covered=Math.min(q,Math.max(0,p.qty));
+   const cost=covered>0?p.cost*covered/p.qty:0;
+   if(covered){p.cost-=cost;p.qty-=covered;}
+   const profit=value*(covered/q)-cost;
+   if(covered<q){p.unmatched+=q-covered;problems.push({owner:o,code:c,qty:q-covered,date,reason:'Venda sem compra anterior no histórico'});}
+   sales.push({owner:o,code:c,date,profit,unmatched:covered<q,covered,qty:q,gross:value});
+  }
+ }
+ return{stocks,sales,problems};
+}
+function makeHistoricalHoldings(led,owner){
+ return Array.from(led.stocks.values()).filter(p=>p.owner===owner&&p.qty>0.00000001).map(p=>({
+  owner,code:p.code,product:p.code,group:classify(p.code,''),qty:p.qty,
+  value:Math.max(0,p.cost),unit:p.qty?p.cost/p.qty:0,origin:'estimated',
+  institution:'Histórico B3',source:'Negociações B3'
+ }));
+}
+function makeSnapshotHoldings(snapshot,owner){
+ if(!snapshot||!Array.isArray(snapshot.rows)||!snapshot.rows.length)return null;
+ return snapshot.rows.map(r=>{
+  const code=tidy(r.code)||tidy(r.product),qty=number(r.qty),value=number(r.value);
+  return{owner,code,product:tidy(r.product)||code,group:classify(code,r.group),qty:Number.isFinite(qty)?qty:0,
+   value:Number.isFinite(value)?value:0,unit:qty?value/qty:0,origin:'position',
+   institution:tidy(r.institution),source:tidy(snapshot.source)||'Posição B3',date:snapshot.date||'',groupRaw:r.group||''};
+ }).filter(r=>r.qty>0&&r.value>=0);
+}
+function portfolio(state,owner='family'){
+ const owners=owner==='family'?['me','spouse']:[ownerOf(owner)],led=ledger(state,owner);
+ const byPerson={},holdings=[];
+ for(const p of owners){
+  const snapshot=p==='spouse'?state.spousePositionSnapshot:state.positionSnapshot;
+  const fromPosition=makeSnapshotHoldings(snapshot,p);
+  const rows=fromPosition||makeHistoricalHoldings(led,p);
+  rows.forEach(x=>holdings.push(x));
+  byPerson[p]={total:rows.reduce((n,x)=>n+x.value,0),count:rows.length,source:fromPosition?'position':'estimated',
+    date:fromPosition?snapshot.date:null,unmatched:led.problems.filter(x=>x.owner===p).length};
+ }
+ holdings.sort((a,b)=>b.value-a.value);
+ const total=holdings.reduce((n,x)=>n+x.value,0);
+ const market=holdings.filter(x=>x.origin==='position').reduce((n,x)=>n+x.value,0);
+ const estimated=total-market;
+ const classes={};for(const h of holdings)classes[h.group]=(classes[h.group]||0)+h.value;
+ return{owner,holdings,total,market,estimated,byPerson,classes,valuation:market>0&&estimated>0?'mixed':estimated>0?'historical':'position',
+  confirmed:estimated===0&&holdings.length>0};
+}
+const DIVTYPES=new Set(['DIVIDENDO','RENDIMENTO','JUROS SOBRE CAPITAL PROPRIO','JCP','RESTITUICAO DE CAPITAL']);
+function dividendRows(state,owner){
+ const owners=owner==='family'?['me','spouse']:[ownerOf(owner)];
+ return state.records.filter(r=>r.t==='mov'&&owners.includes(ownerOf(r.owner))&&norm(r.v[0])==='CREDITO'&&DIVTYPES.has(norm(r.v[2])))
+ .map(r=>({owner:ownerOf(r.owner),date:recordDate(r),amount:number(r.v[7]),code:codeOf(tidy(r.v[3]).split(' - ')[0]),type:tidy(r.v[2])}))
+ .filter(r=>r.date&&Number.isFinite(r.amount)&&r.amount>=0);
+}
+function gains(state,owner='family',period='all',today=isoNow()){
+ const from=cutoff(period,today),port=portfolio(state,owner),led=ledger(state,owner);
+ const sales=led.sales.filter(x=>x.date>=from&&x.date<=today);
+ const payouts=dividendRows(state,owner).filter(x=>x.date>=from&&x.date<=today);
+ const realized=sales.reduce((n,x)=>n+x.profit,0);
+ const dividends=payouts.reduce((n,x)=>n+x.amount,0);
+ let openGain=0,matched=0,missing=0;
+ for(const h of port.holdings){
+  if(h.origin!=='position'){missing++;continue;}
+  const basis=led.stocks.get(h.owner+'|'+codeOf(h.code));
+  const tolerance=Math.max(.00001,.002*h.qty);
+  if(!basis||basis.qty<=0||Math.abs(basis.qty-h.qty)>tolerance){missing++;continue;}
+  matched++;openGain+=h.value-basis.cost;
+ }
+ const openAvailable=period==='all'&&matched>0;
+ const openIncluded=openAvailable?openGain:0;
+ const profit=realized+dividends+openIncluded;
+ const unmatched=led.problems.filter(p=>p.date<=today);
+ const missingWindow=period!=='all';
+ const complete=port.holdings.length>0&&missing===0&&unmatched.length===0&&period==='all';
+ const monthly=new Map();
+ const add=(date,key,amount)=>{const k=date.slice(0,7);if(!monthly.has(k))monthly.set(k,{month:k,realized:0,dividends:0});monthly.get(k)[key]+=amount;};
+ sales.forEach(s=>add(s.date,'realized',s.profit));payouts.forEach(p=>add(p.date,'dividends',p.amount));
+ const months=[...monthly.values()].sort((a,b)=>a.month.localeCompare(b.month));
+ return{
+   owner,period,from,to:today,profit,realized,dividends,openGain:matched?openGain:null,
+   openIncluded,openAvailable,matched,missing,complete:complete&&!missingWindow,
+   partial:!complete||missingWindow,sales:sales.length,payments:payouts.length,
+   positions:port.holdings.length,capitalInvested:port.total,unmatched,monthly:months,
+   warning:missingWindow?'A valorização dos ativos em aberto no período exige posições e preços históricos. O filtro mostra vendas e proventos recebidos no intervalo.':
+       missing?'Nem todas as posições têm preço B3 e custo de aquisição conciliado. O ganho total exibido é parcial.':
+       unmatched.length?'Há vendas sem compras anteriores registradas. O ganho nas vendas pode estar incompleto.':''
+ };
+}
+function gaps(state,owner='family',today=isoNow()){
+ const p=portfolio(state,owner),led=ledger(state,owner),items=[];
+ const selected=owner==='family'?['me','spouse']:[ownerOf(owner)];
+ for(const o of selected){
+  const name=o==='spouse'?'sua esposa':'você',item=p.byPerson[o];
+  const snapshot=o==='spouse'?state.spousePositionSnapshot:state.positionSnapshot;
+  if(!snapshot?.rows?.length){
+   items.push({level:'critical',owner:o,title:'Falta a Posição B3 de '+name,
+    why:'Sem a Posição, a carteira exibe custo histórico, não valor atual de mercado.',
+    action:'Baixe o relatório Posição na Área do Investidor da B3 para '+name+' e importe o Excel.',code:'missing-position'});
+  }else if(snapshot.date&&today.slice(0,7)!==snapshot.date.slice(0,7)){
+   items.push({level:'warning',owner:o,title:'Atualize a Posição B3 de '+name,
+    why:'A última posição registrada é de '+dateBR(snapshot.date)+'.',
+    action:'Baixe e importe uma nova Posição B3.',code:'old-position'});
+  }
+  const ops=state.records.filter(r=>ownerOf(r.owner)===o);
+  const years=[...new Set(ops.map(r=>recordDate(r).slice(0,4)).filter(Boolean))].sort();
+  if(years.length>1){for(let yr=+years[0]+1;yr<+years[years.length-1];yr++)if(!years.includes(String(yr))){
+    items.push({level:'warning',owner:o,title:'Verificar extratos da B3 de '+yr+' ('+name+')',
+     why:'Não há registros importados desse ano. Pode ter sido um ano sem operações, mas é importante conferir.',
+     action:'Na Área do Investidor, confira Negociação e Movimentação de '+yr+'; importe os Excel se existirem.',code:'missing-year-'+yr});
+  }}
+  const problems=led.problems.filter(x=>x.owner===o);
+  if(problems.length)items.push({level:'critical',owner:o,title:'Vendas sem compras anteriores ('+name+')',
+    why:problems.length+' operação(ões) com histórico insuficiente; podem existir transferências ou eventos societários.',
+    action:'Busque Negociação B3 anterior às vendas e os avisos de transferência de custódia; confira desdobramentos e bonificações.',code:'unmatched-sales'});
+  if(item&&item.source==='position'){
+   const result=gains(state,o,'all',today);
+   if(result.missing)items.push({level:'warning',owner:o,title:'Conciliar custo médio de '+name,
+    why:result.missing+' posição(ões) não coincidem com as quantidades calculadas pelas negociações.',
+    action:'Confira extratos de corretoras e eventos societários (desdobramento, grupamento, subscrição, transferência).',code:'cost-reconcile'});
+  }
+ }
+ items.push({level:'info',owner:'family',title:'Lucro financeiro completo entre corretoras e bancos',
+  why:'A B3 mostra compras, vendas e proventos, mas não confirma todos os aportes, saques, saldo em trânsito e taxas bancárias.',
+  action:'Para apurar também o resultado de caixa entre XP, bancos e Inter, obtenha extratos de transferências bancárias/corretoras. O lucro das operações B3 já é calculado automaticamente.',code:'cash-flow-coverage'});
+ return items;
+}
+function parsePositionRows(rows){
+ let index=-1;
+ for(let i=0;i<Math.min(12,rows.length);i++){
+  const h=(rows[i]||[]).map(norm);if(h[0]==='PRODUTO'&&h.includes('VALOR ATUALIZADO')&&h.includes('QUANTIDADE')){index=i;break;}
+ }
+ if(index<0)return null;
+ const header=rows[index].map(norm),at=t=>header.indexOf(norm(t)),get=(r,t)=>at(t)<0?'':r[at(t)]??'';
+ const group=at('Vencimento')>=0&&at('Código ISIN')>=0?'Tesouro Direto':at('Administrador')>=0?'Fundo de Investimento':'ETF';
+ const items=[];let skipped=0;
+ for(const row of rows.slice(index+1)){
+  if(!row||!row.some(x=>tidy(x)))continue;
+  const product=tidy(row[0]),q=number(get(row,'Quantidade')),v=number(get(row,'Valor Atualizado'));
+  if(!product||!Number.isFinite(q)||q<0||!Number.isFinite(v)||v<0){skipped++;continue;}
+  const code=tidy(get(row,group==='Tesouro Direto'?'Código ISIN':'Código de Negociação'))||product.split(' - ')[0];
+  items.push({group,product,code,institution:tidy(get(row,'Instituição')),qty:q,value:v,
+   price:number(get(row,'Preço de Fechamento'))||0,available:number(get(row,'Quantidade Disponível'))||0,
+   maturity:tidy(get(row,'Vencimento')),indexer:tidy(get(row,'Indexador')),applied:number(get(row,'Valor Aplicado'))||0});
+ }
+ return{group,items,skipped};
+}
+function parseSheet(rows){
+ const pos=parsePositionRows(rows);if(pos)return{kind:'position',rows:pos.items,skipped:pos.skipped,group:pos.group};
+ for(let i=0;i<Math.min(12,rows.length);i++){
+  const h=(rows[i]||[]).map(norm);
+  let kind=null;
+  if(h[0]===norm(NHEAD[0])&&h[5]===norm(NHEAD[5]))kind='trade';
+  if(h[0]===norm(MHEAD[0])&&h[2]===norm(MHEAD[2]))kind='mov';
+  if(!kind)continue;
+  const result=[],invalid=[];
+  for(let k=i+1;k<rows.length;k++){
+   const row=rows[k];if(!row||!row.some(x=>tidy(x)))continue;
+   const value=cleanRow(kind,row);
+   if(rowValid(kind,value))result.push(value);
+   else invalid.push(k+1);
+  }
+  return{kind,rows:result,invalid};
+ }
+ return null;
+}
+const uid=()=>root.crypto?.randomUUID?root.crypto.randomUUID():'id-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
+async function importXlsx(state,owner,files,xlsx){
+ const o=ownerOf(owner),input=Array.from(files||[]);
+ if(!input.length)throw Error('Selecione um ou mais arquivos Excel.');
+ if(input.some(f=>!/\.xlsx$/i.test(f.name||'')))throw Error('Aceito apenas Excel .xlsx exportado da B3.');
+ if(!xlsx?.read)throw Error('Leitor de Excel indisponível.');
+ const next=normalizeState(state),newRecords=[],positionByGroup=new Map(),details=[],filesStats=[];
+ const existing=new Map();for(const r of next.records){const key=fingerprint(r.t,r.v,r.owner);existing.set(key,(existing.get(key)||0)+1);}
+ const maxCounts=new Map(),byKey=new Map();let invalid=0,duplicates=0;
+ for(const file of input){
+   let sheets;try{sheets=await xlsx.read(file);}catch(err){throw Error(file.name+': '+(err.message||err));}
+   let recognized=0,localAdds=0,localCount=new Map(),positionCount=0,invalidRows=0;
+   for(const sheet of sheets){
+     const parsed=parseSheet(sheet.rows||[]);if(!parsed)continue;
+     recognized++;
+     if(parsed.kind==='position'){
+       invalidRows+=parsed.skipped||0;
+       if(!positionByGroup.has(parsed.group))positionByGroup.set(parsed.group,[]);
+       positionByGroup.get(parsed.group).push(...parsed.rows.map(r=>({...r,_file:file.name})));
+       positionCount+=parsed.rows.length;continue;
+     }
+     invalidRows+=parsed.invalid?.length||0;
+     for(const v of parsed.rows){
+       const key=fingerprint(parsed.kind,v,o),n=(localCount.get(key)||0)+1;localCount.set(key,n);
+       if(n>(maxCounts.get(key)||0)){
+         maxCounts.set(key,n);
+         if(!byKey.has(key))byKey.set(key,[]);
+         byKey.get(key).push({id:uid(),owner:o,t:parsed.kind,v,source:file.name});
+         localAdds++;
+       }
+     }
+   }
+   if(!recognized)throw Error(file.name+': estrutura não reconhecida. Exporte Negociação, Movimentação ou Posição da B3.');
+   invalid+=invalidRows;
+   filesStats.push({name:file.name,recognized,rows:localAdds,positions:positionCount,invalid:invalidRows});
+ }
+ // A single repeated trade can be legitimate. Keep its original occurrence count
+ // within one export; imports from overlapping exports do not duplicate it again.
+ for(const [key,count] of maxCounts){
+   const old=existing.get(key)||0,add=Math.max(0,count-old);
+   const proposed=byKey.get(key)||[];
+   newRecords.push(...proposed.slice(Math.max(0,proposed.length-add)));
+   duplicates+=Math.min(count,old);
+ }
+ next.records.push(...newRecords);
+ let positionsChanged=0;
+ if(positionByGroup.size){
+   const field=o==='spouse'?'spousePositionSnapshot':'positionSnapshot',before=next[field];
+   const groups=new Set(positionByGroup.keys()),preserved=(before?.rows||[]).filter(r=>!groups.has(r.group));
+   const latest=[];
+   for(const [group,items] of positionByGroup){
+     const seen=new Set();
+     for(const r of items){const key=[r.group,r.code,r.institution,r.qty,r.value].join('|');if(seen.has(key))continue;seen.add(key);const row={...r};delete row._file;latest.push(row);}
+   }
+   const rows=preserved.concat(latest);
+   const total=Math.round(rows.reduce((n,r)=>n+(number(r.value)||0),0)*100)/100;
+   const date=isoNow(),source=input.map(f=>f.name).join(' + ');
+   next[field]={date,rows,total,source,importedAt:new Date().toISOString(),groups:[...groups]};
+   positionsChanged=latest.length;
+   next.positionHistory=next.positionHistory.filter(r=>!(r.owner===o&&r.date===date)).concat([{date,owner:o,total,source,sourceType:'import-date'}]);
+ }
+ for(const f of filesStats)next.sources[(o==='spouse'?'Esposa · ':'Minha · ')+f.name]={
+   type:f.positions?'position':'history',owner:o,accepted:f.rows,positions:f.positions,invalid:f.invalid,importedAt:new Date().toISOString()
+ };
+ return{next,summary:{owner:o,files:input.length,added:newRecords.length,duplicates,invalid,positionsChanged,details:filesStats}};
+}
+root.MoneyTrackerEngine={normalizeState,newState,portfolio,ledger,gains,gaps,cutoff,periodLabel,
+ parseSheet,parsePositionRows,importXlsx,dateISO,dateBR,isoNow,fmt,money,norm,number,codeOf,recordDate,fingerprint,cleanRow,rowValid,dividendRows,classify,LABELS};
+})(window);
