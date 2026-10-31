@@ -68,12 +68,13 @@ function fingerprint(t,row,owner){
  }).join('\u001f');
 }
 function newState(){
- return{v:3,records:[],sources:{},classes:{},quotes:{},positionHistory:[],positionSnapshot:null,spousePositionSnapshot:null,positionParts:{},created:isoNow()};
+ return{v:3,records:[],sources:{},classes:{},quotes:{},fixedIncomeTransactions:[],positionHistory:[],positionSnapshot:null,spousePositionSnapshot:null,positionParts:{},created:isoNow()};
 }
 function normalizeState(raw){
  const s=raw&&typeof raw==='object'?raw:{};
  const out={...newState(),...s,v:3};
  out.records=Array.isArray(s.records)?s.records.filter(r=>['trade','mov'].includes(r?.t)&&Array.isArray(r?.v)).map(r=>({...r,owner:ownerOf(r.owner)})):[];
+ out.fixedIncomeTransactions=Array.isArray(s.fixedIncomeTransactions)?s.fixedIncomeTransactions.filter(t=>t&&t.owner&&t.date&&t.assetCode&&Number.isFinite(+t.amount)&&+t.amount>0):[];
  out.positionHistory=Array.isArray(s.positionHistory)?s.positionHistory:[];
  out.positionParts=s.positionParts&&typeof s.positionParts==='object'?s.positionParts:{};
  out.sources=s.sources&&typeof s.sources==='object'?s.sources:{};
@@ -226,13 +227,32 @@ function makeSnapshotHoldings(snapshot,owner){
    institution:tidy(r.institution),source:tidy(snapshot.source)||'Posição B3',date:snapshot.date||'',groupRaw:r.group||'',applied:Number.isFinite(number(r.applied))?number(r.applied):null};
  }).filter(r=>r.qty>0&&r.value>=0);
 }
+function fixedIncomeHoldings(state,owner){
+ const transactions=(state.fixedIncomeTransactions||[]).filter(t=>ownerOf(t.owner)===owner)
+   .slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.id).localeCompare(String(b.id)));
+ const balances=new Map();
+ for(const tx of transactions){
+  const key=String(tx.assetCode),amount=Number(tx.amount);
+  if(!key||!(amount>0))continue;
+  let p=balances.get(key);
+  if(!p){p={owner,code:key,product:tx.product||key,group:'Renda fixa',institution:tx.institution||'',rate:tx.rate||'',maturity:tx.maturity||'',balance:0,date:tx.date,source:tx.source||'Registro manual'};balances.set(key,p);}
+  p.balance+=tx.operation==='sell'?-amount:amount;
+  p.date=tx.date;
+ }
+ return [...balances.values()].filter(x=>x.balance>0.005).map(x=>({
+  owner,code:x.code,product:x.product,group:x.group,institution:x.institution,
+  qty:1,value:Math.round(x.balance*100)/100,unit:Math.round(x.balance*100)/100,
+  origin:'estimated',fixedIncome:true,applied:null,
+  source:x.source,date:x.date,rate:x.rate,maturity:x.maturity
+ }));
+}
 function portfolio(state,owner='family'){
  const owners=owner==='family'?['me','spouse']:[ownerOf(owner)],led=ledger(state,owner);
  const byPerson={},holdings=[];
  for(const p of owners){
   const snapshot=p==='spouse'?state.spousePositionSnapshot:state.positionSnapshot;
   const fromPosition=makeSnapshotHoldings(snapshot,p);
-  const rows=fromPosition||makeHistoricalHoldings(led,p);
+  const rows=[...(fromPosition||makeHistoricalHoldings(led,p)),...fixedIncomeHoldings(state,p)];
   rows.forEach(x=>{
    if(x.origin==='position'&&x.group!=='Tesouro'){
     const q=state.quotes?.[x.code],age=Date.now()-Date.parse(q?.at||'');
@@ -272,6 +292,7 @@ function gains(state,owner='family',period='all',today=isoNow()){
  for(const h of port.holdings){
   // Direitos de subscrição sem valor de mercado não são posições compradas nem lucro em aberto.
   if(h.value===0&&/^[A-Z]{4}1[23]$/.test(codeOf(h.code)))continue;
+  if(h.fixedIncome){missing++;continue;} // Não supor juros/valor atualizado a partir de compras e resgates.
   if(h.origin!=='position'&&h.origin!=='quote'){missing++;continue;}
   if(h.group==='Tesouro'){
    // B3 position report contains Valor Aplicado for Tesouro Direto.
@@ -304,7 +325,7 @@ function gains(state,owner='family',period='all',today=isoNow()){
  const months=[...monthly.values()].sort((a,b)=>a.month.localeCompare(b.month));
  let warning='';
  if(excludedSales.length)warning=excludedSales.length+' venda(s) do período estão fora do lucro porque não há custo de aquisição completo. Consulte Pendências.';
- if(missing)warning+=(warning?' ':'')+missing+' posição(ões) sem custo conciliado ou preço B3; o ganho em aberto é parcial.';
+ if(missing)warning+=(warning?' ':'')+missing+' posição(ões) sem valorização comprovada (inclusive renda fixa sem saldo atualizado); o ganho em aberto é parcial.';
  if(missingWindow)warning+=(warning?' ':'')+'A valorização das posições abertas nesse período não é calculada sem preços históricos comparáveis.';
  if(!warning&&unmatched.length)warning='Há eventos societários ou compras anteriores a conferir; o resultado acumulado pode estar incompleto.';
  return{
@@ -345,10 +366,15 @@ function gaps(state,owner='family',today=isoNow()){
   }
   if(item&&item.source==='position'){
    const result=gains(state,o,'all',today);
-   if(result.missing)items.push({level:'warning',owner:o,title:'Conciliar custo médio de '+name,
-    why:result.missing+' posição(ões) ainda não têm custo ou valorização integralmente comprovados. Isso não significa necessariamente divergência de quantidade.',
+   const otherMissing=Math.max(0,result.missing-p.holdings.filter(h=>h.owner===o&&h.fixedIncome).length);
+   if(otherMissing)items.push({level:'warning',owner:o,title:'Conciliar custo médio de '+name,
+    why:otherMissing+' posição(ões) ainda não têm custo ou valorização integralmente comprovados. Isso não significa necessariamente divergência de quantidade.',
     action:'Confira extratos de corretoras e eventos societários (desdobramento, grupamento, subscrição, transferência).',code:'cost-reconcile'});
   }
+  const fixed=p.holdings.filter(h=>h.owner===o&&h.fixedIncome);
+  if(fixed.length)items.push({level:'info',owner:o,title:'Renda fixa sem saldos atualizados ('+name+')',
+   why:fixed.length+' aplicação(ões) com saldo líquido calculado apenas pelas compras e resgates. Juros e valor de resgate não são conhecidos.',
+   action:'Consulte o saldo atualizado de RDB/LCI no banco ou extrato atual; não é necessário informar rendimentos estimados.',code:'fixed-income-current-value'});
  }
  items.push({level:'info',owner:'family',title:'Lucro financeiro completo entre corretoras e bancos',
   why:'A B3 mostra compras, vendas e proventos, mas não confirma todos os aportes, saques, saldo em trânsito e taxas bancárias.',
