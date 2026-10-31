@@ -104,11 +104,11 @@ E.gaps=function(state,owner='family',today=E.isoNow()){
    const words=explained.map(x=>x.code+': posição '+x.position+' e compra de '+x.bought+
       ' unidades em 28/10/2026, já registrada no histórico');
    if(irim)words.push('IRIM11: origem confirmada na liquidação de IRDM11 (82 cotas geraram 72 IRIM11 e fração leiloada); custo fiscal da reorganização precisa ser tratado separadamente');
-   return {...issue,level:unresolved.length?'warning':'info',code:'reconcile-position-timing',
-    title:explained.length+' divergências de posição explicadas por compras recentes'+
-      (unresolved.length?' e '+unresolved.length+' conversão(ões)/custo(s) ainda a calcular':''),
-    why:'Não faltam comprovantes das compras recentes. '+words.join('. ')+'.',
-    action:'Não reenvie BOVA11 ou BEST11. Confirme apenas uma posição B3 atualizada após essas compras para o valor de mercado. A origem IRIM11 já foi localizada em 2025; falta aplicar o custo fiscal sem misturar a amortização.'};
+   return {...issue,level:'warning',code:'reconcile-position-timing',
+    title:explained.length+' diferenças entre compras recentes e posição importada'+
+      (unresolved.length?', mais '+unresolved.length+' custo(s) pendente(s)':''),
+    why:'As notas de compra já estão no histórico, mas não constam da posição B3 importada. '+words.join('. ')+'. Não é possível assegurar que seja somente atraso de liquidação.',
+    action:'Não reenvie as notas de BOVA11 ou BEST11. Confirme apenas a posição atual que reflita essas aquisições; se elas já estiverem lá, a divergência deve ser tratada como erro de importação.'};
   }
   if(issue.owner!=='spouse'||issue.code!=='missing-position'||!historical?.rows?.length)return issue;
   return {...issue,level:'warning',code:'historical-spouse-position',
@@ -121,6 +121,14 @@ E.gaps=function(state,owner='family',today=E.isoNow()){
  const selected=ownerSet(owner);
  const items=revised.filter(x=>x.code!=='cash-flow-coverage'&&
    !(x.code==='unverified-sales'&&selected.includes(x.owner)&&auditable.has(x.owner)));
+ if(selected.includes('me')&&state?.reconciliation?.positionMismatch?.ITSA4){
+  const p=state.reconciliation.positionMismatch.ITSA4;
+  items.push({level:'warning',owner:'me',code:'historical-position-discrepancy',
+    title:'ITSA4: '+p.historic_qty+' ações reconstruídas não constam na posição atual',
+    why:'As notas e bonificações de 2019 a 2026 indicam saldo de '+p.historic_qty+
+      ' ações após a venda de abril de 2026. O extrato de posição importado não apresenta ITSA4.',
+    action:'Conferir especificamente o saldo de ITSA4 na B3/Inter, ou uma transferência/negociação posterior. Não são necessárias novamente as notas de compras anteriores.'});
+ }
  for(const o of selected){
   if(!auditable.has(o))continue;
   const report=audit(state,o,'all',today),g=E.gains(state,o,'all',today);
