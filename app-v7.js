@@ -240,8 +240,22 @@ function profitDetails(){
  }else if(id==='income'){
   selected=card(titlebar('Proventos recebidos')+d.payouts.slice(0,120).map(x=>line(E.dateBR(x.date)+' · '+x.code,buyer(x.owner)+' · '+x.type,money(x.amount))).join('')+(d.payouts.length>120?'<p>Mostrando 120 pagamentos mais recentes de '+d.payouts.length+'. Selecione período menor para ver mais.</p>':''));
  }
- const assets=d.assets.map(g=>'<button type="button" data-detail="'+esc('asset:'+g.owner+'|'+g.code)+'" class="mt7-row" style="width:100%;text-align:left"><span class="info"><b>'+esc(g.code)+' · '+buyer(g.owner)+'</b><small>'+g.sales.length+' venda(s) · Recebido '+money(g.gross)+' · Custo '+money(g.cost)+'</small></span><span class="price"><strong>'+money(g.profit)+'</strong></span></button>').join('');
- return card(titlebar('Operações que compõem o lucro')+'<p>Vendas: <b>'+money(d.realized)+'</b> · Proventos: <b>'+money(d.dividends)+'</b> · Total realizado: <b>'+money(d.realized+d.dividends)+'</b>.</p><p>'+d.sales.length+' vendas · '+d.payouts.length+' pagamentos · '+d.excluded+' vendas sem custo comprovado.</p><button type="button" class="mt7-btn secondary" data-detail="income">Ver proventos individualmente</button>')+selected+card(titlebar('Vendas por ativo')+(assets||'<p>Não houve vendas neste período.</p>'));
+ const classes=new Map();
+ for(const g of d.assets){
+  const classe=E.classify(g.code,'');
+  if(!classes.has(classe))classes.set(classe,{name:classe,gross:0,cost:0,profit:0,sales:0,unverified:0,assets:[]});
+  const x=classes.get(classe);x.gross+=g.gross;x.cost+=g.cost;x.profit+=g.profit;x.sales+=g.sales.length;
+  x.unverified+=g.sales.filter(s=>!s.recognized).length;x.assets.push(g);
+ }
+ const assetRow=g=>'<button type="button" data-detail="'+esc('asset:'+g.owner+'|'+g.code)+'" class="mt7-row" style="width:100%;text-align:left"><span class="info"><b>'+esc(g.code)+' · '+buyer(g.owner)+'</b><small>'+g.sales.length+' venda(s) · Vendido '+money(g.gross)+' · Custo '+money(g.cost)+'</small></span><span class="price"><strong>'+money(g.profit)+'</strong><small>'+(g.profit<0?'Prejuízo':'Lucro')+'</small></span></button>';
+ const classRows=[...classes.values()].sort((a,b)=>Math.abs(b.profit)-Math.abs(a.profit)).map(x=>{
+  const open=ui.classOpen===x.name;
+  return card('<button type="button" data-class="'+esc(x.name)+'" class="mt7-row" style="width:100%;text-align:left"><span class="info"><b>'+esc(x.name)+' · '+x.sales+' venda(s)</b><small>Total vendido '+money(x.gross)+' · Custo '+money(x.cost)+(x.unverified?' · '+x.unverified+' sem custo confirmado':'')+'</small></span><span class="price"><strong>'+money(x.profit)+'</strong><small>'+(x.profit<0?'Prejuízo':'Lucro')+' · '+(open?'Ocultar':'Ver ativos')+'</small></span></button>'+
+   (open?x.assets.sort((a,b)=>Math.abs(b.profit)-Math.abs(a.profit)).map(assetRow).join(''):''));
+ }).join('');
+ return card(titlebar('Operações que compõem o lucro')+'<p>Vendas: <b>'+money(d.realized)+'</b> · Proventos: <b>'+money(d.dividends)+'</b> · Total realizado: <b>'+money(d.realized+d.dividends)+'</b>.</p><p>'+d.sales.length+' vendas · '+d.payouts.length+' pagamentos · '+d.excluded+' vendas sem custo comprovado.</p><button type="button" class="mt7-btn secondary" data-detail="income">Ver proventos individualmente</button>')+selected+
+ card(titlebar('Lucro e prejuízo por classe')+'<p class="mt7-footnote">Agrupado por tipo de investimento. Toque na classe para expandir os ativos e depois toque no ativo para ver as operações.</p>')+
+ (classRows||card('<p>Não houve vendas neste período.</p>'));
 }
 function profit(){
  const p=E.portfolio(S,ui.owner),g=E.gains(S,ui.owner,ui.period);
@@ -468,6 +482,7 @@ function listen(){
   const group=t.closest('[data-category]');if(group){ui.category=group.dataset.category;render();return;}
   const hist=t.closest('[data-history-kind]');if(hist){ui.historyKind=hist.dataset.historyKind;render();return;}
   const h=t.closest('[data-asset]');if(h){ui.assetKey=h.dataset.asset;go('asset');return;}
+  const cl=t.closest('[data-class]');if(cl){ui.classOpen=ui.classOpen===cl.dataset.class?'':cl.dataset.class;render();return;}
   const detail=t.closest('[data-detail]');if(detail){ui.detailId=ui.detailId===detail.dataset.detail?'':detail.dataset.detail;render();return;}
   const quote=t.closest('[data-quote]');if(quote){await updateQuote(quote.dataset.quote);return;}
   const action=t.closest('[data-action]');
