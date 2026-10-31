@@ -217,6 +217,9 @@ E.gains=function(state,owner='family',period='all',today=E.isoNow()){
  const remainingProblems=(base.unmatched||[]).filter(p=>
   !confirmedKeys.has((p.owner||'me')+'|'+p.date+'|'+E.codeOf(p.code)));
  const parts=[];
+ const custodyMismatch=ownerSet(owner).includes('me')&&Boolean(state?.reconciliation?.positionMismatch?.ITSA4)&&
+  !E.portfolio(state,'me').holdings.some(h=>E.codeOf(h.code)==='ITSA4'&&Number(h.qty)>0);
+ if(custodyMismatch)parts.push('ITSA4: 99 ações reconstruídas estão ausentes da posição atual; lucro patrimonial completo não verificável.');
  if(excluded.length)parts.push(excluded.length+' negociações sem custo confirmado foram excluídas do lucro.');
  if(a.unmatched)parts.push(a.unmatched+' conciliações não coincidiram com as negociações importadas.');
  if(missing){
@@ -231,8 +234,8 @@ E.gains=function(state,owner='family',period='all',today=E.isoNow()){
   sales:recognized.length,totalSales:sales.length,excludedSales:excluded.length,
   excludedGross:excluded.reduce((total,x)=>total+x.gross,0),
   payments:payouts.length,monthly:[...monthly.values()].sort((x,y)=>x.month.localeCompare(y.month)),
-  complete:missing===0&&remainingProblems.length===0&&excluded.length===0&&a.unmatched===0&&a.provisional===0&&a.incomplete===0&&period==='all',
-  partial:!(missing===0&&remainingProblems.length===0&&excluded.length===0&&a.unmatched===0&&a.provisional===0&&a.incomplete===0&&period==='all'),warning:parts.join(' '),
+  complete:missing===0&&remainingProblems.length===0&&excluded.length===0&&a.unmatched===0&&a.provisional===0&&a.incomplete===0&&!custodyMismatch&&period==='all',
+  partial:!(missing===0&&remainingProblems.length===0&&excluded.length===0&&a.unmatched===0&&a.provisional===0&&a.incomplete===0&&!custodyMismatch&&period==='all'),warning:parts.join(' '),
   reconciliationVerified:a.verified,reconciliationProvisional:a.provisional,
   reconciliationIncomplete:a.incomplete,reconciliationUnmatched:a.unmatched};
 };
