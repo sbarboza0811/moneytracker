@@ -223,7 +223,7 @@ function makeSnapshotHoldings(snapshot,owner){
  return snapshot.rows.map(r=>{
   const code=tidy(r.code)||tidy(r.product),qty=number(r.qty),value=number(r.value);
   return{owner,code,product:tidy(r.product)||code,group:classify(code,r.group),qty:Number.isFinite(qty)?qty:0,
-   value:Number.isFinite(value)?value:0,unit:qty?value/qty:0,origin:'position',
+   value:Number.isFinite(value)?value:0,unit:qty?value/qty:0,snapshotPrice:number(r.price)>0?number(r.price):null,origin:'position',
    institution:tidy(r.institution),source:tidy(snapshot.source)||'Posição B3',date:snapshot.date||'',groupRaw:r.group||'',applied:Number.isFinite(number(r.applied))?number(r.applied):null};
  }).filter(r=>r.qty>0&&r.value>=0);
 }
