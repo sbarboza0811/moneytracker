@@ -104,6 +104,7 @@ E.gaps=function(state,owner='family',today=E.isoNow()){
    const words=explained.map(x=>x.code+': posição '+x.position+' e compra de '+x.bought+
       ' unidades em 28/10/2026, já registrada no histórico');
    if(irim)words.push('IRIM11: origem confirmada na liquidação de IRDM11 (82 cotas geraram 72 IRIM11 e fração leiloada); custo fiscal da reorganização precisa ser tratado separadamente');
+   if(!explained.length&&!unresolved.length)return null;
    return {...issue,level:'warning',code:'reconcile-position-timing',
     title:explained.length+' diferenças entre compras recentes e posição importada'+
       (unresolved.length?', mais '+unresolved.length+' custo(s) pendente(s)':''),
@@ -115,13 +116,14 @@ E.gaps=function(state,owner='family',today=E.isoNow()){
    title:'Jessica: 16 ativos reconstruídos; valor de mercado de 2026 não confirmado',
    why:'O relatório de 2024 já foi recebido. '+(state.reconciliation?.spouseDerivedHoldings?.assetsCount||0)+' ativos tiveram suas quantidades reconstruídas até setembro/2026 usando 35 negócios e desdobramento do ALZR11. Isso não substitui posição oficial de 2026 ou preços atuais.',
    action:'Nada a reenviar de 2024. Para valor de mercado atual, é necessária uma posição de 2026 se ela não estiver disponível nas fontes conectadas.'};
- });
+ }).filter(Boolean);
  if(!getEntries(state).length)return revised.filter(x=>x.code!=='cash-flow-coverage');
  const auditable=new Set(getEntries(state).map(x=>x.owner));
  const selected=ownerSet(owner);
  const items=revised.filter(x=>x.code!=='cash-flow-coverage'&&
    !(x.code==='unverified-sales'&&selected.includes(x.owner)&&auditable.has(x.owner)));
- if(selected.includes('me')&&state?.reconciliation?.positionMismatch?.ITSA4){
+ if(selected.includes('me')&&state?.reconciliation?.positionMismatch?.ITSA4&&
+    !E.portfolio(state,'me').holdings.some(h=>E.codeOf(h.code)==='ITSA4'&&Number(h.qty)>0)){
   const p=state.reconciliation.positionMismatch.ITSA4;
   items.push({level:'warning',owner:'me',code:'historical-position-discrepancy',
     title:'ITSA4: '+p.historic_qty+' ações reconstruídas não constam na posição atual',
