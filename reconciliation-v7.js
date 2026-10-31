@@ -69,7 +69,7 @@ E.gaps=function(state,owner='family',today=E.isoNow()){
  const revised=base.map(issue=>{
   if(issue.owner!=='spouse'||issue.code!=='missing-position'||!historical?.rows?.length)return issue;
   return {...issue,level:'warning',code:'historical-spouse-position',
-   title:'Posição da Jessica de 31/12/2024 já recebida',
+   title:'Posição histórica da Jessica recebida; valor atual de 2026 ainda sem confirmação',
    why:'A B3 confirmou '+historical.rows.length+' ativos em 31/12/2024. Este relatório histórico foi vinculado ao aplicativo; não é valorização atual de 2026.',
    action:'Nada a reenviar de 2024. Para valor de mercado atual, é necessária uma posição de 2026 se ela não estiver disponível nas fontes conectadas.'};
  });
