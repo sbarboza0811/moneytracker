@@ -215,10 +215,10 @@ E.gains=function(state,owner='family',period='all',today=E.isoNow()){
  payouts.forEach(x=>add(x.date,'dividends',x.amount));
  const realized=rounded(recognized.reduce((total,x)=>total+x.profit,0));
  const dividends=rounded(payouts.reduce((total,x)=>total+x.amount,0));
- const confirmedKeys=new Set(a.checks.filter(x=>x.matched&&x.status==='CALCULAVEL_BRUTO')
-  .map(x=>x.owner+'|'+x.date+'|'+E.codeOf(x.code)));
+ // Problemas do livro bruto não são pendências novas quando a venda já está conciliada.
+ // Somente vendas efetivamente excluídas ou conciliações sem correspondência bloqueiam o resultado.
  const remainingProblems=(base.unmatched||[]).filter(p=>
-  !confirmedKeys.has((p.owner||'me')+'|'+p.date+'|'+E.codeOf(p.code)));
+  excluded.some(x=>x.owner===(p.owner||'me')&&x.date===p.date&&E.codeOf(x.code)===E.codeOf(p.code)));
  const parts=[];
  const custodyMismatch=ownerSet(owner).includes('me')&&Boolean(state?.reconciliation?.positionMismatch?.ITSA4)&&
   !E.portfolio(state,'me').holdings.some(h=>E.codeOf(h.code)==='ITSA4'&&Number(h.qty)>0);
