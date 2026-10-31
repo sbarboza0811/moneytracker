@@ -159,9 +159,41 @@ function portfolio(){
  '<div style="margin-top:10px">'+(rows.length?rows.map(h=>holdingsRows({holdings:[h]},1)).join(''):'<div class="mt7-chartempty">Nenhuma posição encontrada.</div>')+'</div>')+
  '<div class="mt7-actionrow"><button class="mt7-btn secondary" data-nav="import">Atualizar Posição B3</button><button class="mt7-btn ghost" data-nav="quotes">Cotações</button></div>';
 }
+
+function reconciliationCard(pendenciesOnly=false){
+ if(ui.owner==='me'||!S.reconciliation?.sales?.length||!E.reconciliationReport)return '';
+ const a=E.reconciliationReport(S,ui.owner,pendenciesOnly?'all':ui.period);
+ const rows=a.items.filter(x=>!x.matched||x.status!=='CALCULAVEL_BRUTO');
+ const complete=a.verified;
+ let html=titlebar('Jessica · conciliação de investimentos')+
+ '<p>Os custos reconstruídos só são usados quando o registro importado da B3 corresponde à data, quantidade e valor da venda.</p>'+
+ '<div class="mt7-cards3" style="margin-top:15px">'+
+ stat('Conferidos',String(complete),'Resultados brutos')+
+ stat('Provisórios',String(a.provisional),'Excluídos do lucro')+
+ stat('Incompletos',String(a.incomplete+a.unmatched),'Excluídos do lucro')+
+ '</div>';
+ if(pendenciesOnly&&rows.length)html+='<div class="mt7-checklist">'+rows.map(x=>
+ '<article class="mt7-check warning"><span class="mt7-pill warn">'+
+ esc(!x.matched?'Divergente':x.status==='PROVISORIO'?'Provisório':'Incompleto')+
+ '</span><h3 style="margin-top:10px">'+esc(x.code)+' · '+esc(E.dateBR(x.date))+
+ '</h3><p>'+fmt(x.qty)+' unidades · '+esc(x.broker||'corretora')+
+ ' · Venda '+money(x.gross)+'</p><div class="action"><b>O que falta</b><p>'+
+ esc(x.note||'Revisar custo e eventos societários')+'</p></div></article>').join('')+'</div>';
+ if(!pendenciesOnly){
+  html+='<button class="mt7-btn secondary" data-nav="needs">Ver operações pendentes</button>';
+ }
+ let out=card(html);
+ if(!pendenciesOnly&&(ui.period==='all'||ui.period==='5y')){
+  const annual=S.reconciliation.annualIncome?.find(x=>x.year===2024);
+  if(annual)out+=card(titlebar('Rendimentos de 2024 · Jessica')+
+  '<p>A B3 informou <b>'+money(annual.amount)+'</b> em 2024. É uma referência anual, <b>não somada ao lucro filtrado</b>, até que existam datas de pagamento verificadas, evitando duplicação.</p>');
+ }
+ return out;
+}
+
 function profit(){
  const p=E.portfolio(S,ui.owner),g=E.gains(S,ui.owner,ui.period);
- return profitSummary(g)+
+ return profitSummary(g)+reconciliationCard()+
  '<div class="mt7-cards3">'+stat('Lucro nas vendas',money(g.realized),g.sales+' vendas com custo comprovado')+
  stat('Proventos identificados',money(g.dividends),g.payments+' créditos','income')+
  stat('Valorização em aberto',ui.period==='all'?(g.openGain===null?'—':money(g.openGain)):'Não apurada',ui.period==='all'?g.matched+' de '+g.positions+' posições':'Faltam cotações do início do período')+
@@ -229,7 +261,7 @@ function imported(){
 }
 function needs(){
  const p=E.portfolio(S,ui.owner),issues=E.gaps(S,ui.owner);
- return card(titlebar('O que falta para resultados completos')+
+ return reconciliationCard(true)+card(titlebar('O que falta para resultados completos')+
  '<p>Não é necessário configurar lucro. Este checklist é gerado automaticamente a partir dos arquivos recebidos.</p>'+
  '<div class="mt7-cards3" style="margin-top:15px">'+stat('Total de pendências',String(issues.length),'Inclui avisos de cobertura')+
  stat('Dados B3',String(S.records.filter(r=>ui.owner==='family'||r.owner===ui.owner).length),'Negociações e movimentações')+
