@@ -137,6 +137,17 @@ function evolutionChart(owner){
  '<text x="'+(w-p)+'" y="'+(h-2)+'" text-anchor="end" font-size="11" fill="#82948b">'+E.dateBR(points.at(-1).date)+'</text></svg>'+
  '<p class="mt7-footnote">Patrimônio informado nos relatórios B3. A variação inclui novos aportes e retiradas: não é rentabilidade.</p>';
 }
+function dashboardViz(p,g){
+ const total=p.total||0,items=Object.entries(p.classes||{}).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);
+ const colors=['#298bc0','#31b79b','#a1d3ed','#f3a95b','#8e81cc','#d36c80'];
+ let offset=0;
+ const conic=items.map(([key,value],i)=>{const start=offset;offset+=value/Math.max(1,total)*100;return colors[i%colors.length]+' '+start.toFixed(2)+'% '+offset.toFixed(2)+'%';}).join(',');
+ const donut='<div class="mt7-donutwrap"><div class="mt7-donut" style="background:conic-gradient('+conic+')"><div class="mt7-donutcenter"><b>'+money(total)+'</b><small>Patrimônio</small></div></div><div class="mt7-donutlegend">'+items.map(([k,v],i)=>'<div><i style="background:'+colors[i%colors.length]+'"></i><span>'+esc(k)+'</span><strong>'+((100*v)/Math.max(1,total)).toFixed(1).replace('.',',')+'%</strong></div>').join('')+'</div></div>';
+ const months=(g.monthly||[]).slice(-12),peak=Math.max(1,...months.map(x=>Math.abs(x.realized+x.dividends)));
+ const bars='<div class="mt7-dashbars">'+months.map(m=>{const val=m.realized+m.dividends;return '<div class="mt7-dashbarcol" title="'+esc(m.month)+' · '+money(val)+'"><div class="mt7-dashbar" style="height:'+Math.max(2,Math.abs(val)/peak*130).toFixed(1)+'px;background:'+(val<0?'#d36c80':'#2db585')+'"></div><small>'+esc(m.month.slice(5))+'</small></div>';}).join('')+'</div>';
+ const cards='<div class="mt7-kpi-grid">'+stat('Patrimônio atual',money(total),p.holdings.length+' posições')+stat('Lucro em vendas',money(g.realized),'Período selecionado')+stat('Proventos',money(g.dividends),'Período selecionado')+stat('Resultado realizado',money(g.realized+g.dividends),'Sem valorização de posições')+'</div>';
+ return '<section class="mt7-dash-header">'+cards+'<div class="mt7-dashboard-grid">'+card(titlebar('Evolução mensal do resultado')+bars+'<p class="mt7-footnote">Barras mostram vendas e proventos; não são valorização total do patrimônio.</p>')+card(titlebar('Distribuição por classe')+donut)+'</div></section>';
+}
 function home(){
  const p=E.portfolio(S,ui.owner),g=E.gains(S,ui.owner,ui.period);
  // Pendências verificadas somente quando solicitadas.
@@ -144,7 +155,7 @@ function home(){
  '<div class="mt7-herometa"><span>'+p.holdings.length+' posições</span><span>'+S.records.filter(r=>ui.owner==='family'||r.owner===ui.owner).length+' registros</span>'+
  '<span>'+(p.valuation==='mixed'?'Consolidado indicativo':p.valuation==='historical'?'Custo histórico':'Posição B3')+'</span></div>'+
  '<button type="button" data-nav="portfolio">Ver carteira ›</button></section>'+
- accountNotice(p)+sourceSplit(p)+profitSummary(g)+
+ dashboardViz(p,g)+accountNotice(p)+sourceSplit(p)+profitSummary(g)+
  '<div class="mt7-col2">'+
  card(titlebar('Onde está investido','portfolio')+allocation(p))+
  card(titlebar('Principais posições','portfolio')+holdingsRows(p,5))+'</div>'+
@@ -160,7 +171,7 @@ function portfolio(){
  const categories=['all',...new Set(p.holdings.map(h=>h.group))];
  return '<section class="mt7-hero"><small>Capital investido · posições</small><h2>'+money(p.total)+'</h2><div class="mt7-herometa"><span>'+p.holdings.length+' posições por titular</span>'+
  '<span>'+(p.valuation==='mixed'?'Fontes diferentes':p.valuation==='historical'?'Custo histórico':'Relatório B3')+'</span></div></section>'+
- accountNotice(p)+sourceSplit(p)+
+ dashboardViz(p,E.gains(S,ui.owner,ui.period))+accountNotice(p)+sourceSplit(p)+
  card(titlebar('Ativos ('+rows.length+')')+
  '<div class="mt7-filter">'+categories.map(c=>'<button type="button" data-category="'+esc(c)+'" class="'+(ui.category===c?'active':'')+'">'+(c==='all'?'Todos':esc(c))+'</button>').join('')+'</div>'+
  '<input type="search" id="mt7-search" class="mt7-input" placeholder="Buscar ativo ou instituição" value="'+esc(ui.search)+'" aria-label="Buscar ativo">'+
@@ -304,7 +315,7 @@ function wealthCharts(){
 }
 function profit(){
  const p=E.portfolio(S,ui.owner),g=E.gains(S,ui.owner,ui.period);
- return profitSummary(g)+wealthCharts()+profitDetails()+reconciliationCard()+
+ return dashboardViz(p,g)+profitSummary(g)+wealthCharts()+profitDetails()+reconciliationCard()+
  '<div class="mt7-cards3">'+stat('Lucro nas vendas',money(g.realized),g.sales+' vendas com custo comprovado')+
  stat('Proventos identificados',money(g.dividends),g.payments+' créditos','income')+
  stat('Valorização em aberto',ui.period==='all'?(g.openGain===null?'—':money(g.openGain)):'Não incluída',ui.period==='all'?g.matched+' de '+g.positions+' posições':'Sem preços históricos comparáveis')+
@@ -323,7 +334,7 @@ function income(){
  const g=E.gains(S,ui.owner,ui.period),from=E.cutoff(ui.period),rows=E.dividendRows(S,ui.owner).filter(x=>x.date>=from).sort((a,b)=>b.date.localeCompare(a.date));
  const by=new Map();rows.forEach(r=>by.set(r.date.slice(0,7),(by.get(r.date.slice(0,7))||0)+r.amount));
  const monthly=[...by].sort((a,b)=>b[0].localeCompare(a[0]));
- return card(titlebar('Proventos recebidos')+periodFilters()+'<div class="mt7-mainnumber">'+money(g.dividends)+'</div><p>'+rows.length+' créditos identificados no período.</p>')+
+ return dashboardViz(E.portfolio(S,ui.owner),g)+card(titlebar('Proventos recebidos')+periodFilters()+'<div class="mt7-mainnumber">'+money(g.dividends)+'</div><p>'+rows.length+' créditos identificados no período.</p>')+
  card(titlebar('Recebimentos por mês')+
  (monthly.length?monthly.slice(0,36).map(([m,v])=>'<div class="mt7-row"><span class="mt7-symbol">↓</span><span class="info"><b>'+esc(m.slice(5)+'/'+m.slice(0,4))+'</b></span><span class="price"><strong>'+money(v)+'</strong></span></div>').join(''):'<div class="mt7-chartempty">Nenhum pagamento registrado no intervalo.</div>'))+
  card(titlebar('Últimos pagamentos')+(rows.slice(0,40).map(r=>'<div class="mt7-row"><span class="mt7-symbol">'+esc(r.code.slice(0,2)||'↓')+'</span><span class="info"><b>'+esc(r.code||r.type)+'</b><small>'+esc(r.owner==='spouse'?'Esposa':'Minha')+' · '+E.dateBR(r.date)+' · '+esc(r.type)+'</small></span><span class="price"><strong>'+money(r.amount)+'</strong></span></div>').join('')||'<div class="mt7-chartempty">Sem proventos.</div>'))+
@@ -403,7 +414,7 @@ function pendingSalesDetails(){
 function needs(){
  const report=analysis&&analysisOwner===ui.owner&&analysisState===S?analysis:analyzeNow();
  const p=report.portfolio,issues=report.issues,g=report.gains;
- return card(titlebar('Análise atual dos dados')+
+ return dashboardViz(p,g)+card(titlebar('Análise atual dos dados')+
  '<p>Diagnóstico recalculado a partir dos registros atuais; nenhum resultado é salvo como pendência fixa.</p><button type="button" class="mt7-btn secondary" data-action="analyze">Analisar agora</button>')+
  card(titlebar('Diagnóstico: operações e valores de mercado')+
  '<p>Diagnóstico calculado a partir dos arquivos importados. Resultados de vendas são diferentes da avaliação de mercado atual: um pode estar conciliado sem o outro.</p>'+
@@ -436,7 +447,7 @@ function history(){
 }
 function insights(){
  const p=E.portfolio(S,ui.owner),largest=p.holdings[0],pct=p.total&&largest?100*largest.value/p.total:0;
- return card(titlebar('Concentração por classe')+allocation(p))+
+ return dashboardViz(p,E.gains(S,ui.owner,ui.period))+card(titlebar('Concentração por classe')+allocation(p))+
  card(titlebar('Diagnóstico de composição')+
  (largest?'<div class="mt7-row"><span class="mt7-symbol">▤</span><span class="info"><b>Maior posição: '+esc(largest.code)+'</b><small>'+esc(largest.owner==='me'?'Minha':'Esposa')+' · '+pct.toFixed(1).replace('.',',')+'% do total calculado</small></span><span class="price"><strong>'+money(largest.value)+'</strong></span></div>':'<p>Nenhuma posição para analisar.</p>')+
  (pct>=25?'<div class="mt7-note warning">Concentração elevada em um ativo (25% ou mais do total). Confira o risco antes de novos aportes.</div>':'')+
