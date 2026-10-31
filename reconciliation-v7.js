@@ -39,7 +39,7 @@ function audit(state,owner='family',period='all',today=E.isoNow()){
  const groups=new Map(),overrides=new Map(),checks=[];
  for(const s of sales){const k=saleKey(s);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(s);}
  for(const rec of selected){
-  const key=rec.owner+'|'+rec.date+'|'+rec.code,rows=groups.get(key)||[];
+  const key=rec.owner+'|'+rec.date+'|'+E.codeOf(rec.code),rows=groups.get(key)||[];
   // Algumas vendas ocorrem no mesmo dia em corretoras diferentes.
   // Conciliar primeiro a linha exata, depois permitir grupo por data+ativo.
   const exact=rows.find(x=>!overrides.has(x)&&Math.abs(num(x.qty)-num(rec.qty))<0.00001&&
