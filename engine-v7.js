@@ -227,7 +227,7 @@ function portfolio(state,owner='family'){
 const DIVTYPES=new Set(['DIVIDENDO','RENDIMENTO','JUROS SOBRE CAPITAL PROPRIO','JCP']);
 function dividendRows(state,owner){
  const owners=owner==='family'?['me','spouse']:[ownerOf(owner)];
- return state.records.filter(r=>r.t==='mov'&&owners.includes(ownerOf(r.owner))&&norm(r.v[0])==='CREDITO'&&DIVTYPES.has(norm(r.v[2])))
+ return state.records.filter(r=>r.t==='mov'&&owners.includes(ownerOf(r.owner))&&norm(r.v[0])==='CREDITO'&&(DIVTYPES.has(norm(r.v[2]))||(norm(r.v[2])==='JUROS'&&norm(r.v[3]).startsWith('TESOURO '))))
  .map(r=>({owner:ownerOf(r.owner),date:recordDate(r),amount:number(r.v[7]),code:codeOf(tidy(r.v[3]).split(' - ')[0]),type:tidy(r.v[2])}))
  .filter(r=>r.date&&Number.isFinite(r.amount)&&r.amount>=0);
 }
