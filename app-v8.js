@@ -130,65 +130,6 @@ function dataNotice(d){
  return '';
 }
 
-function purchaseFlows(){
- const d=rows(),r=scope(),map=new Map(),owners=U.owner==='family'?['me','spouse']:[U.owner];
- function add(date,kind,amount){
-  if(!date||date<r.from||date>r.to||!(Number(amount)>0))return;
-  const key=date.slice(0,7),row=map.get(key)||{date:key,invested:0,redeemed:0,profit:0};
-  row[kind]+=Number(amount);map.set(key,row);
- }
- for(const t of S.records||[]){
-  if(!owners.includes(t.owner||'me'))continue;
-  const date=E.recordDate(t),v=t.v||[];
-  if(t.t==='trade'&&E.norm(v[1])==='COMPRA'){
-   const cls=group(v[5],v[2]);if(U.classe==='all'||cls===U.classe)add(date,'invested',E.number(v[8]));
-  }else if(t.t==='mov'&&E.norm(v[2])==='COMPRA'&&E.norm(v[0])==='CREDITO'&&/^TESOURO /i.test(v[3]||'')){
-   if(U.classe==='all'||U.classe==='Tesouro')add(date,'invested',E.number(v[7]));
-  }
- }
- for(const t of S.fixedIncomeTransactions||[]){
-  if(!owners.includes(t.owner))continue;
-  if(U.classe!=='all'&&U.classe!=='Renda fixa')continue;
-  add(t.date,t.operation==='sell'?'redeemed':'invested',t.amount);
- }
- for(const t of d.sales)if(t.recognized&&Number.isFinite(+t.profit)){
-  const key=t.date.slice(0,7),row=map.get(key)||{date:key,invested:0,redeemed:0,profit:0};row.profit+=Number(t.profit);map.set(key,row);
- }
- for(const t of d.payouts){
-  const key=t.date.slice(0,7),row=map.get(key)||{date:key,invested:0,redeemed:0,profit:0};row.profit+=Number(t.amount);map.set(key,row);
- }
- return [...map.values()].sort((a,b)=>a.date.localeCompare(b.date));
-}
-function wealthGroup(data){
- if(U.grain!=='year')return data;
- const m=new Map();for(const x of data){
-  const key=x.date.slice(0,4),r=m.get(key)||{date:key,invested:0,redeemed:0,profit:0};
-  for(const field of ['invested','redeemed','profit'])r[field]+=Number(x[field]||0);
-  m.set(key,r);
- }return [...m.values()].sort((a,b)=>a.date.localeCompare(b.date));
-}
-function barsInvestedProfit(){
- const all=wealthGroup(purchaseFlows()),limit=U.grain==='year'?18:30,values=all.slice(-limit);
- const topSum=all.reduce((o,r)=>({invested:o.invested+r.invested,redeemed:o.redeemed+r.redeemed,profit:o.profit+r.profit}),{invested:0,redeemed:0,profit:0});
- const labels='<div class="m8-wealth-kpis">'+
- '<div><small>Compras e aplicações</small><strong>'+money(topSum.invested)+'</strong></div>'+
- '<div><small>Lucro realizado</small><strong class="'+(topSum.profit<0?'negative':'positive')+'">'+money(topSum.profit)+'</strong></div>'+
- '<div><small>Resgates de renda fixa</small><strong>'+money(topSum.redeemed)+'</strong></div></div>';
- if(!all.length)return labels+empty('Não há compras, aplicações ou lucro realizado no período selecionado.');
- const w=Math.max(670,values.length*60),height=274,top=32,base=191,bottom=236;
- const maxPos=Math.max(1,...values.map(x=>Math.max(x.invested,x.profit,0))),maxNeg=Math.max(1,...values.map(x=>Math.abs(Math.min(x.profit,0)))),posScale=137/maxPos,negScale=38/maxNeg;
- const rects=values.map((v,i)=>{
-  const x=39+(i+.5)*(w-78)/values.length,hi=Math.max(v.invested?1:0,v.invested*posScale),hp=v.profit>=0?Math.max(v.profit?1:0,v.profit*posScale):Math.max(1,-v.profit*negScale);
-  const buys='<rect x="'+(x-19)+'" y="'+(base-hi)+'" width="16" height="'+hi+'" rx="3" fill="#5a7ef1"><title>'+escape(v.date)+' · Aplicações '+money(v.invested)+'</title></rect>';
-  const gains='<rect x="'+(x+3)+'" y="'+(v.profit>=0?base-hp:base)+'" width="16" height="'+hp+'" rx="3" fill="'+(v.profit<0?'#e36b80':'#14b99b')+'"><title>'+escape(v.date)+' · Resultado '+money(v.profit)+'</title></rect>';
-  return '<g role="button" tabindex="0" data-month="'+escape(v.date)+'" aria-label="Abrir operações de '+escape(v.date)+'">'+buys+gains+
-    '<text x="'+x+'" y="251" text-anchor="middle" fill="#8593aa" font-size="11">'+escape(U.grain==='year'?v.date:v.date.slice(5)+'/'+v.date.slice(2,4))+'</text></g>';
- }).join('');
- return labels+'<div class="m8-plot"><svg width="'+w+'" height="'+height+'" viewBox="0 0 '+w+' '+height+'" role="img" aria-label="Aplicações e lucro realizado comparados por '+(U.grain==='year'?'ano':'mês')+'"><line x1="25" y1="'+base+'" x2="'+(w-25)+'" y2="'+base+'" stroke="#b8c5da"/><line x1="25" y1="70" x2="'+(w-25)+'" y2="70" stroke="#e9eef8" stroke-dasharray="3 5"/>'+rects+'</svg></div>'+
- '<div class="m8-legend"><span><i style="background:#5a7ef1"></i>Compras/aplicações</span><span><i style="background:#14b99b"></i>Lucro realizado</span><span><i style="background:#e36b80"></i>Prejuízo realizado</span></div>'+
- (all.length>limit?'<p class="m8-hint">Exibindo '+limit+' períodos recentes; os totais acima abrangem todo o intervalo filtrado.</p>':'')+
- '<p class="m8-hint">Compras são movimentações registradas, não necessariamente dinheiro novo. Lucro é o resultado de vendas conciliadas mais proventos. Não representa patrimônio de mercado.</p>';
-}
 function confirmedWealthData(){
  const owners=U.owner==='family'?['me','spouse']:[U.owner],d=initialData(U.owner),r=scope();
  const snapshots=[];
@@ -231,15 +172,11 @@ function barsConfirmedWealth(){
  '<div class="m8-legend"><span><i style="background:#587aea"></i>Investido (custo conhecido)</span><span><i style="background:#16b99a"></i>Lucro em aberto</span><span><i style="background:#e36b80"></i>Prejuízo em aberto</span><span><i style="background:#b4c0d6"></i>Sem custo conciliado</span></div>'+
  '<p class="m8-hint">Apenas datas com relatório de posição B3 disponível. Os investimentos bancários sem saldo atualizado não aparecem neste gráfico. Não criamos meses ou anos sem dados.</p>';
 }
-function wealthDashboard(large=false){
+function wealthDashboard(){
+ if(!confirmedWealthData().length)return '';
  const buttons='<div class="m8-pills"><button data-grain="month" class="'+(U.grain==='month'?'sel':'')+'">Mensal</button><button data-grain="year" class="'+(U.grain==='year'?'sel':'')+'">Anual</button></div>';
- const hasOperations=purchaseFlows().length>0,hasSnapshots=confirmedWealthData().length>0;
- const flow=hasOperations?box(header('Investimentos × lucro realizado', 'Barras por '+(U.grain==='year'?'ano':'mês')+' · filtradas por titular, classe e período')+buttons+barsInvestedProfit(),'m8-wealth-major'):'';
- const confirmed=hasSnapshots?box(header('Patrimônio: investido × valorização','Somente datas com posição e custo disponíveis')+buttons+barsConfirmedWealth(),'m8-wealth-minor'):'';
- if(!flow&&!confirmed)return '';
- return '<section class="m8-wealth-dashboard">'+(large?flow+confirmed:'<div class="m8-grid m8-wealth-grid">'+flow+confirmed+'</div>')+'</section>';
+ return '<section class="m8-wealth-dashboard">'+box(header('Patrimônio: investido × valorização','Somente datas com posição e custo disponíveis')+buttons+barsConfirmedWealth(),'m8-wealth-major')+'</section>';
 }
-
 function pageHome(){
  const d=rows(),m=getMonths(d);
  return kpi(d)+dataNotice(d)+wealthDashboard()+
@@ -364,16 +301,13 @@ function pageCompare(){
 }
 function pageFlow(){
  const d=rows(),unknown=d.holdings.filter(h=>!basisFor(h,d.ledger).verified&&!h.fixedIncome).reduce((n,h)=>n+h.value,0);
- const changes=d.openGain,bank=d.holdings.filter(h=>h.fixedIncome);
+ const changes=d.openGain;
  return '<div class="m8-kpis">'+iconStat('Patrimônio representado',money(d.total),'Valores atuais e nominais','blue','portfolio')+
  iconStat('Custo conciliado',money(changes.cost),changes.matched+' posições avaliadas','orange','flow')+
  iconStat('Valorização identificada',changes.matched?money(changes.gain):'—','Ganho em aberto onde calculável','teal','result')+
  iconStat('Renda fixa nominal',money(changes.nominalValue),changes.incomePending+' aplicações sem juros atualizados','violet','portfolio')+'</div>'+
  wealthDashboard(true)+
- (unknown>0?box(header('Valores sem custo conciliado','Posições que ainda exigem base documental')+'<p><strong>'+money(unknown)+'</strong> em '+changes.missing+' posição(ões).</p>'):'')+
- box(header('Dinheiro novo × reinvestimento','O que conseguimos afirmar com os dados disponíveis')+
- '<div class="m8-notice">Compras de ativos e aplicações de renda fixa não representam necessariamente dinheiro novo. Para calcular aportes líquidos, precisamos conhecer depósitos externos, transferências e saques. O gráfico de aplicações mostra apenas operações de compra identificadas, e não depósitos confirmados.</div>'+
- (bank.length?'<p class="m8-hint">RDB e LCI: '+money(changes.nominalValue)+' de principal líquido registrado em '+bank.length+' aplicação(ões). Os juros não foram inventados nem registrados como lucro ou pendência de custo.</p>':'')) ;
+ (unknown>0?box(header('Valores sem custo conciliado','Posições que ainda exigem base documental')+'<p><strong>'+money(unknown)+'</strong> em '+changes.missing+' posição(ões).</p>'):'');
 }
 function analyze(){analysis={state:S,owner:U.owner,issues:E.gaps(S,U.owner),at:new Date().toISOString()};}
 function pageNeeds(){
