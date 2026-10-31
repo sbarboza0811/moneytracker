@@ -40,10 +40,15 @@ function audit(state,owner='family',period='all',today=E.isoNow()){
  for(const s of sales){const k=saleKey(s);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(s);}
  for(const rec of selected){
   const key=rec.owner+'|'+rec.date+'|'+rec.code,rows=groups.get(key)||[];
-  const quantity=rows.reduce((t,x)=>t+num(x.qty),0);
-  const gross=rows.reduce((t,x)=>t+num(x.gross),0);
-  // Somente sobrepor quando a negociação da B3 confere com o arquivo auditado.
-  const matched=rows.length>0&&Math.abs(quantity-num(rec.qty))<0.00001&&
+  // Algumas vendas ocorrem no mesmo dia em corretoras diferentes.
+  // Conciliar primeiro a linha exata, depois permitir grupo por data+ativo.
+  const exact=rows.find(x=>!overrides.has(x)&&Math.abs(num(x.qty)-num(rec.qty))<0.00001&&
+   Math.abs(num(x.gross)-num(rec.gross))<=0.02);
+  const groupRows=exact?[exact]:rows.filter(x=>!overrides.has(x));
+  const quantity=groupRows.reduce((t,x)=>t+num(x.qty),0);
+  const gross=groupRows.reduce((t,x)=>t+num(x.gross),0);
+  // Somente sobrepor quando a quantidade e o valor conferem.
+  const matched=groupRows.length>0&&Math.abs(quantity-num(rec.qty))<0.00001&&
    Math.abs(gross-num(rec.gross))<=0.02;
   checks.push({...rec,matched});
   if(!matched)continue;
