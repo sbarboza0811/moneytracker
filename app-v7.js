@@ -10,6 +10,8 @@ const ui={page:'home',owner:'family',importOwner:'me',period:'all',category:'all
 const NAV=[['home','⌂','Início'],['portfolio','▤','Carteira'],['profit','↗','Lucro'],['import','⇧','Importar'],['needs','☑','Pendências']];
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=E.money,fmt=E.fmt,num=E.number;
+const ownerName=o=>String(S.displayNames?.[o]||({me:'Samuel',spouse:'Jessica',family:'Todos'}[o])||o);
+
 const dollar=n=>'<strong>'+money(n)+'</strong>';
 const titlebar=(label,link,label2)=>'<div class="mt7-cardhead"><h2>'+esc(label)+'</h2>'+(link?'<button type="button" data-nav="'+link+'">'+esc(label2||'Ver mais')+' ›</button>':'')+'</div>';
 const card=(html,cls='')=>'<section class="mt7-card '+cls+'">'+html+'</section>';
@@ -34,7 +36,7 @@ function layout(content){
  '<main class="mt7-body"><header class="mt7-top"><div><div class="mt7-eyebrow">MoneyTracker / Versão 7.8</div><h1>'+pages[ui.page]+'</h1></div>'+
  '<div class="mt7-top-actions"><button data-nav="needs" title="O que falta para completar" class="mt7-iconbtn" aria-label="Pendências">☑</button>'+
  '<button data-nav="more" title="Conta, backup e sincronização" class="mt7-iconbtn" aria-label="Mais">☰</button></div></header>'+
- '<div class="mt7-owners" role="group" aria-label="Selecionar carteira">'+ownerButton('family','Família')+ownerButton('me','Minha')+ownerButton('spouse','Esposa')+'</div>'+
+ '<div class="mt7-owners" role="group" aria-label="Selecionar carteira">'+ownerButton('family',ownerName('family'))+ownerButton('me',ownerName('me'))+ownerButton('spouse',ownerName('spouse'))+'</div>'+
  '<div class="mt7-content">'+content+'</div></main>'+
  '<nav class="mt7-bottom" aria-label="Menu principal">'+NAV.map(n=>navButton(...n)).join('')+'</nav></div>';
 }
@@ -46,7 +48,7 @@ function accountNotice(p){
 function sourceSplit(p){
  const owners=ui.owner==='family'?['me','spouse']:[ui.owner];
  return '<div class="mt7-cards3">'+owners.map(o=>{
-  const x=p.byPerson[o]||{},label=o==='me'?'Minha':'Esposa';
+  const x=p.byPerson[o]||{},label=ownerName(o);
   return stat(label+(x.source==='estimated'?' · estimado':' · B3'),money(x.total||0),(x.count||0)+' posições · '+(x.source==='estimated'?'custo histórico':E.dateBR(x.date)||'posição importada'),'portfolio');
  }).join('')+'</div>';
 }
@@ -227,7 +229,7 @@ function reconciliationCard(pendenciesOnly=false){
 function profitDetails(){
  if(!E.profitBreakdown)return card('<p>Detalhamento indisponível.</p>');
  const d=E.profitBreakdown(S,ui.owner,ui.period),id=ui.detailId||'';
- const buyer=x=>x.owner==='spouse'?'Jessica':'Samuel';
+ const buyer=x=>ownerName(x.owner);
  const line=(title,subtitle,amount)=>'<div class="mt7-row"><span class="info"><b>'+esc(title)+'</b><small>'+esc(subtitle)+'</small></span><span class="price"><strong>'+esc(amount)+'</strong></span></div>';
  let selected='';
  if(id.startsWith('asset:')){
@@ -455,6 +457,12 @@ function more(){
  '<div class="mt7-row"><span class="mt7-symbol">☁</span><span class="info"><b>Sincronização Supabase</b><small id="mt7-cloud-status">'+esc(root.MoneyTrackerCloudV7?.status||'Conectado')+'</small></span></div>'+
  '<div class="mt7-actionrow" style="margin-top:15px"><button class="mt7-btn secondary" data-action="sync">Sincronizar</button>'+
  '<button class="mt7-btn ghost" data-action="logout">Sair da conta</button><button class="mt7-btn ghost" data-action="install-app">Instalar app</button></div>')+
+ card(titlebar('Personalizar nomes das carteiras')+
+ '<p>Edite os nomes exibidos sem alterar os titulares dos investimentos.</p>'+
+ '<div class="mt7-field"><label>Minha carteira</label><input id="mt7-name-me" class="mt7-input" maxlength="32" value="'+esc(ownerName('me'))+'"></div>'+
+ '<div class="mt7-field"><label>Carteira da esposa</label><input id="mt7-name-spouse" class="mt7-input" maxlength="32" value="'+esc(ownerName('spouse'))+'"></div>'+
+ '<div class="mt7-field"><label>Visão conjunta</label><input id="mt7-name-family" class="mt7-input" maxlength="32" value="'+esc(ownerName('family'))+'"></div>'+
+ '<button type="button" class="mt7-btn" data-action="save-names">Salvar nomes</button>')+
  card(titlebar('Ferramentas')+
  [['history','◷','Histórico completo','Compras, vendas e movimentações'],['income','↓','Proventos','Dividendos e rendimentos'],['insights','✧','Análises','Concentração e riscos'],['quotes','◉','Cotações','Consultar preços dos ativos'],['needs','☑','Pendências','Documentos e dados faltantes']].map(([id,icon,label,desc])=>
  '<button data-nav="'+id+'" class="mt7-row" style="width:100%;border:0;border-bottom:1px solid #eef1ec;background:#fff"><span class="mt7-symbol">'+icon+'</span><span class="info"><b>'+label+'</b><small>'+desc+'</small></span><span>›</span></button>').join(''))+
@@ -533,6 +541,10 @@ function listen(){
   const action=t.closest('[data-action]');
   if(!action)return;
   const a=action.dataset.action;
+  if(a==='save-names'){
+   const names={};for(const o of ['me','spouse','family'])names[o]=(document.getElementById('mt7-name-'+o)?.value||'').trim().slice(0,32)||({me:'Samuel',spouse:'Jessica',family:'Todos'}[o]);
+   changeData({...S,displayNames:names});showToast('Nomes atualizados e enviados para sincronização.');return;
+  }
   if(a==='more-history'){ui.historyLimit+=70;render();}
    if(a==='analyze'){invalidateAnalysis();analyzeNow();render();showToast('Análise recalculada com os dados atuais.');}
   if(a==='backup')download('moneytracker-v7-backup-'+E.isoNow()+'.json',JSON.stringify({format:'moneytracker-backup',version:7,date:new Date().toISOString(),data:S},null,2));
