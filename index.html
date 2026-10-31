@@ -600,7 +600,7 @@ function dispatch(e){
   const del=e.target.closest('[data-delete]');if(del){const r=S.records.find(x=>x.id===del.dataset.delete);if(r&&confirm('Excluir definitivamente este registro?')){S.records=S.records.filter(x=>x.id!==r.id);save();render();toast('Registro excluído.');}return;}
   const a=e.target.closest('[data-act]');if(!a)return;const act=a.dataset.act;
   if(act==='v3-benchmark'){v3benchmarks();return;}
-  if(act==='open-import'){if(page!=='files'){page='files';render();}const nativeFile=$('#v2-file-input');if(nativeFile){nativeFile.click();nativeFile.focus();}else toast('Abra a aba Importar e selecione um arquivo XLSX.',true);return;}if(act==='add-trade'||act==='add-mov'){ui.modal={t:act==='add-mov'?'mov':'trade'};renderModal();return;}
+  if(act==='open-import'){ui.importOwner=ui.owner==='spouse'?'spouse':ui.importOwner||'me';page='files';window.scrollTo(0,0);render();return;}if(act==='add-trade'||act==='add-mov'){ui.modal={t:act==='add-mov'?'mov':'trade'};renderModal();return;}
   if(act==='close-modal'){ui.modal=null;$('.modal-bg')?.remove();return;}
   if(act==='show-more'){ui.pageLimit+=80;render();return;}
   if(act==='export-trade'||act==='export-mov'){exportSheet(act==='export-trade'?'trade':'mov');return;}
@@ -642,7 +642,7 @@ document.addEventListener('submit',e=>{
 document.addEventListener('change',e=>{if(e.target.matches('#v2-import-owner')){ui.importOwner=e.target.value;return;}if(e.target.matches('#pf')){ui.portfolioFilter=e.target.value;render();}if(e.target.matches('[data-class]')){S.classes[e.target.dataset.class]=e.target.value;save();render();toast('Classificação do ativo ajustada.');}});
 document.addEventListener('input',e=>{if(e.target.matches('#search')){const val=e.target.value,sel=e.target.selectionStart;ui.search=val;render();const field=$('#search');field?.focus();field?.setSelectionRange(sel,sel);}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&ui.modal){ui.modal=null;$('.modal-bg')?.remove();}});
-document.addEventListener('change',async e=>{if(e.target?.id==='v2-file-input'){const selected=Array.from(e.target.files||[]);if(selected.length){try{await importExcel(selected);}catch(err){ui.report='Falha na importação: '+(err?.message||err);page='files';render();toast(ui.report,true);}}if(e.target.isConnected)e.target.value='';}});
+document.addEventListener('change',async e=>{if(e.target?.id==='v2-file-input'){const selected=Array.from(e.target.files||[]);if(selected.length){ui.report='Importando '+selected.length+' arquivo(s)…';const status=document.createElement('div');status.className='v2callout';status.setAttribute('role','status');status.textContent=ui.report; e.target.closest('.v2panel')?.appendChild(status);try{await importExcel(selected);}catch(err){ui.report='Falha na importação: '+(err?.message||err);page='files';render();toast(ui.report,true);}}if(e.target.isConnected)e.target.value='';}});
 $('#file-input').addEventListener('change',async e=>{if(e.target.files.length)await importExcel(e.target.files);e.target.value='';});
 $('#backup-input').addEventListener('change',async e=>{if(e.target.files.length)await restoreBackup(e.target.files[0]);e.target.value='';});
 document.addEventListener('dragover',e=>{if(e.dataTransfer?.types?.includes('Files')){e.preventDefault();$('#drop-zone')?.classList.add('drag');}});
