@@ -464,8 +464,8 @@ function insightHome(){
  const z=insightData();
  if(!z||!z.total)return '';
  const top=z.segments.filter(x=>x.id!=='other').sort((a,b)=>b.percent-a.percent)[0];
- const head='Análise inteligente da carteira';
- const detail=top?top.short+' representa '+top.percent.toFixed(1).replace('.',',')+'% dos investimentos. Compare cenários e veja onde um novo aporte mudaria a distribuição.':'Confira a composição dos seus investimentos.';
+ const head='Análise da carteira com IA';
+ const detail=top?top.short+' representa '+top.percent.toFixed(1).replace('.',',')+'% dos investimentos. Consulte o analista de IA para discutir oportunidades concretas.':'Converse com a IA sobre os seus investimentos.';
  return '<section class="m8-ins-home"><div><small>✦ LEITURA DINÂMICA DA CARTEIRA</small><b>'+escape(head)+'</b><p>'+escape(detail)+'</p></div><button class="m8-btn primary" data-nav="insights">Explorar análise ›</button></section>';
 }
 function pageInsights(){
@@ -499,7 +499,8 @@ function pageInsights(){
  return '<div class="m8-ins-intro"><span>✦ ANÁLISE PATRIMONIAL</span><h2>O que sua carteira está dizendo?</h2>'+
  '<p>Diagnóstico automático da composição atual, com cenários de diversificação e aportes hipotéticos. Atualiza quando a carteira ou as cotações mudam.</p></div>'+
  summary+
- box(header('Distribuição atual × cenário','Escolha apenas uma referência de comparação, não um perfil definido para você.')+
+ (root.MoneyTrackerAI?.panel?.()||box('<p>O componente de IA não foi carregado. Atualize o aplicativo.</p>'))+
+ box(header('Simulador de alocação sem IA: distribuição atual × cenário','Escolha apenas uma referência de comparação, não um perfil definido para você.')+
  '<div class="m8-ins-toggle" aria-label="Cenário de alocação">'+choices+'</div>'+
  '<div class="m8-ins-chart">'+chart+'</div>'+
  '<p class="m8-hint">Metas ilustrativas configuradas pelo simulador, não um modelo de suitability pessoal. As porcentagens somam 100% e incluem apenas os valores conhecidos.</p>')+
