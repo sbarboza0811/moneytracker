@@ -555,9 +555,28 @@ async function refreshAllQuotes(auto=false,symbols=null){
  }
  await Promise.all(Array.from({length:Math.min(4,codes.length)},()=>worker()));
  U.quoteErrors=failures;U.quoteLoading=false;
- U.quoteProgress=Object.keys(updates).length+' cotação(ões) atualizada(s)'+(failures.length?' · '+failures.length+' sem preço novo (mantida última referência)':'')+'.';
- if(Object.keys(updates).length)save({...S,quotes:{...S.quotes,...updates}});else render();
- if(!auto)notify(U.quoteProgress,Object.keys(updates).length===0);
+ const checked=Object.keys(updates).length;
+ const next=checked?E.normalizeState({...S,quotes:{...S.quotes,...updates}}):S;
+ // Compare effective asset values, not fetch timestamps or the number of successful requests.
+ const valuesByAsset=state=>{
+  const map=new Map();
+  for(const h of E.portfolio(state,'family').holdings){
+   if(h.fixedIncome||h.group==='Tesouro')continue;
+   const key=h.owner+'|'+h.code;
+   map.set(key,round((map.get(key)||0)+Number(h.value||0)));
+  }
+  return map;
+ };
+ const before=valuesByAsset(S),after=valuesByAsset(next);
+ const changed=[...after.keys()].filter(k=>Math.abs((after.get(k)||0)-(before.get(k)||0))>=0.005).length;
+ const quoteDates=[...new Set(Object.values(updates).map(q=>q.marketDate).filter(Boolean))];
+ const reference=quoteDates.length===1?' · pregão '+E.dateBR(quoteDates[0]):'';
+ U.quoteProgress=checked
+  ?checked+' preço(s) conferido(s) · '+(changed?changed+' posição(ões) com valor alterado':'nenhuma mudança de valor')+reference+
+    (failures.length?' · '+failures.length+' sem cotação nova (valor anterior mantido)':'')+'.'
+  :'Nenhuma cotação nova disponível. Valores anteriores mantidos'+(failures.length?' · '+failures.length+' consulta(s) sem preço':'')+'.';
+ if(checked)save(next);else render();
+ if(!auto)notify(U.quoteProgress,checked===0);
 }
 async function quote(symbol){return refreshAllQuotes(false,[symbol]);}
 function listen(){
