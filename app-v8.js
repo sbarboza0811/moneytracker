@@ -527,7 +527,7 @@ function pageMore(){
  '<div><h3>Sincronização</h3><p id="mt7-cloud-status">'+escape(root.MoneyTrackerCloudV7?.status||'Verificando…')+'</p><div class="m8-actions"><button class="m8-btn sub" data-action="sync">Sincronizar</button><button class="m8-btn sub" data-action="backup">Exportar backup</button><button class="m8-btn sub" data-action="restore-pick">Restaurar backup</button><button class="m8-btn sub" data-action="logout">Sair da conta</button></div></div></div>'+
  '<input type="file" id="m8-restore" accept=".json,application/json" hidden>')+
  box(header('Ferramentas','Importar e verificar seus dados')+
- '<div class="m8-quick">'+[['import','⇧','Importar B3'],['history','≡','Histórico completo'],['income','↓','Proventos'],['quotes','◉','Cotações'],['insights','✦','Análises'],['needs','✓','Diagnóstico']].map(([id,ic,label])=>'<button class="m8-quicklink" data-nav="'+id+'"><span>'+ic+'</span>'+label+' <b>›</b></button>').join('')+'</div>');
+ '<div class="m8-quick">'+[['compare','⇄','Comparações'],['import','⇧','Importar B3'],['history','≡','Histórico completo'],['income','↓','Proventos'],['quotes','◉','Cotações'],['insights','✦','Análises'],['needs','✓','Diagnóstico']].map(([id,ic,label])=>'<button class="m8-quicklink" data-nav="'+id+'"><span>'+ic+'</span>'+label+' <b>›</b></button>').join('')+'</div>');
 }
 function layout(content){
  const titles={home:'Visão geral',portfolio:'Carteira e alocação',result:'Resultados e rentabilidade',compare:'Comparações integradas',insights:'Análises e oportunidades',flow:'Origem do patrimônio',needs:'Diagnóstico financeiro',asset:'Detalhe do ativo',sale:'Detalhe da venda',income:'Proventos',history:'Histórico',import:'Importação B3',more:'Configurações',quotes:'Cotações'};
