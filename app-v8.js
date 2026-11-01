@@ -528,9 +528,9 @@ async function refreshAllQuotes(auto=false,symbols=null){
  if(symbols)codes=codes.filter(x=>symbols.includes(x));
  if(auto){
   const now=Date.now();let last=0;
-  try{last=Number(root.localStorage.getItem('moneytracker-quotes-autorefresh')||0);}catch(_){}
+  try{last=Number(root.localStorage.getItem('moneytracker-quotes-autorefresh-v245')||0);}catch(_){}
   if(now-last<6*3600000)return;
-  try{root.localStorage.setItem('moneytracker-quotes-autorefresh',String(now));}catch(_){}
+  try{root.localStorage.setItem('moneytracker-quotes-autorefresh-v245',String(now));}catch(_){}
   codes=codes.filter(x=>!quoteMeta(x).fresh||now-Date.parse(S.quotes[x].at)>6*3600000);
  }
  if(!codes.length)return;
