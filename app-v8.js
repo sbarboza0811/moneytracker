@@ -109,13 +109,13 @@ function donut(items,total){
  return '<div class="m8-donut-box"><div class="m8-donut" style="background:conic-gradient('+css+')" aria-label="Distribuição patrimonial"><div><span>Posições</span><strong>'+money(total)+'</strong></div></div><div class="m8-donut-legend">'+items.filter(x=>x.value>0).map((x,i)=>'<button class="m8-legend-row" data-class="'+escape(x.name)+'"><i style="background:'+PALETTE[i%PALETTE.length]+'"></i><span>'+escape(x.name)+'</span><b>'+(100*x.value/total).toFixed(1).replace('.',',')+'%</b></button>').join('')+'</div></div>';
 }
 function alloc(d){const m=new Map();for(const h of d.holdings){const k=group(h.code,h.group);m.set(k,(m.get(k)||0)+Number(h.value||0));}return [...m].map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value);}
-function quoteMeta(code,positionDate=''){
+function positionMarketDay(date){\n  if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(date||'')))return String(date||'');\n  const day=new Date(date+'T12:00:00Z');\n  if(day.getUTCDay()===6)day.setUTCDate(day.getUTCDate()-1);\n  if(day.getUTCDay()===0)day.setUTCDate(day.getUTCDate()-2);\n  return day.toISOString().slice(0,10);\n }\n function quoteMeta(code,positionDate=''){
  const q=S.quotes?.[code],price=Number(q?.price);
  const date=String(q?.marketDate||q?.at||'').slice(0,10);
  const validDate=/^\d{4}-\d{2}-\d{2}$/.test(date)&&Number.isFinite(Date.parse(date+'T12:00:00Z'));
  const dateTime=validDate?Date.parse(date+'T12:00:00Z'):NaN;
- const validSource=/brapi|capital agora/i.test(String(q?.provider||''));
- const available=!!q&&validSource&&Number.isFinite(price)&&price>0&&validDate&&dateTime<=Date.now()+86400000&&(!positionDate||date>=positionDate);
+ const validSource=/brapi|capital agora|yahoo finance/i.test(String(q?.provider||''));
+ const available=!!q&&validSource&&Number.isFinite(price)&&price>0&&validDate&&dateTime<=Date.now()+86400000&&(!positionDate||date>=positionMarketDay(positionDate));
  const fetchedAge=Date.now()-Date.parse(q?.at||'');
  const fresh=available&&Number.isFinite(fetchedAge)&&fetchedAge>=0&&fetchedAge<=4*86400000&&Date.now()-dateTime<=8*86400000;
  return{quote:q||null,date,available,fresh,stale:available&&!fresh};
@@ -135,7 +135,7 @@ function quoteSummary(){
 function quoteUpdateControls(){
  return '<div class="m8-quote-controls"><button class="m8-btn primary" data-action="refresh-quotes" '+(U.quoteLoading?'disabled':'')+'>'+(U.quoteLoading?'Consultando…':'↻ Atualizar todas as cotações')+'</button>'+
  '<span id="m8-quote-progress" role="status" aria-live="polite">'+escape(U.quoteProgress||'Consulte o último preço disponível por ativo.')+'</span></div>'+
- (U.quoteErrors?.length?'<div class="m8-quote-errors"><b>'+U.quoteErrors.length+' ativo(s) sem nova cotação</b><p>'+escape(U.quoteErrors.slice(0,8).map(x=>x.symbol).join(', '))+'</p><small>Usando a última cotação salva ou a posição B3 mais recente, com a data indicada. O custo de aquisição não muda.</small></div>':'');
+ (U.quoteErrors?.length?'<div class="m8-quote-errors"><b>'+U.quoteErrors.length+' ativo(s) sem nova cotação</b><p>'+escape(U.quoteErrors.slice(0,6).map(x=>x.symbol+': '+x.message).join(' · '))+'</p><small>Usando a última cotação salva ou a posição B3 mais recente, com a data indicada. O custo de aquisição não muda.</small></div>':'');
 }
 function assetRow(h,d){
  const b=basisFor(h,d.ledger),gain=b.verified?money(h.value-b.cost):'—';
@@ -241,7 +241,7 @@ function pagePortfolio(){
  const d=rows(),classes=alloc(d);let sorted=d.holdings.slice();
  const q=U.search.toLowerCase();if(q)sorted=sorted.filter(h=>(h.code+' '+h.product+' '+h.institution).toLowerCase().includes(q));
  sorted.sort((a,b)=>U.sort==='name'?a.code.localeCompare(b.code):U.sort==='gain'?((basisFor(b,d.ledger).verified?b.value-basisFor(b,d.ledger).cost:-Infinity)-(basisFor(a,d.ledger).verified?a.value-basisFor(a,d.ledger).cost:-Infinity)):b.value-a.value);
- return kpi(d)+dataNotice(d)+box(header('Cotações da carteira','Atualize preços do último pregão; renda fixa e Tesouro ficam separados')+quoteSummary()+quoteUpdateControls()+'<p class="m8-hint">Fonte: <a href="https://capitalagora.com.br/api" target="_blank" rel="noopener">Capital Agora</a> (B3) ou brapi.dev; cobertura parcial quando indisponível.</p>')+'<div class="m8-grid m8-two">'+box(header('Alocação por classe','Clique para filtrar o restante da carteira')+donut(classes,d.total))+
+ return kpi(d)+dataNotice(d)+box(header('Cotações da carteira','Atualize preços do último pregão; renda fixa e Tesouro ficam separados')+quoteSummary()+quoteUpdateControls()+'<p class="m8-hint">Fonte: <a href="https://capitalagora.com.br/api" target="_blank" rel="noopener">Capital Agora</a> (fechamento B3), brapi.dev ou Yahoo Finance (.SA, fonte alternativa); cobertura sujeita à disponibilidade.</p>')+'<div class="m8-grid m8-two">'+box(header('Alocação por classe','Clique para filtrar o restante da carteira')+donut(classes,d.total))+
  box(header('Valor por classe','Comparação dos saldos atuais')+'<div class="m8-classbars">'+classes.map((c,i)=>'<button data-class="'+escape(c.name)+'" class="m8-classbar"><span>'+escape(c.name)+'</span><div><i style="background:'+PALETTE[i%PALETTE.length]+';width:'+Math.max(1,100*c.value/Math.max(1,classes[0]?.value))+'%"></i></div><strong>'+money(c.value)+'</strong></button>').join('')+'</div>')+'</div>'+
  box(header('Explorador de ativos',sorted.length+' posições no filtro atual')+
  '<div class="m8-row m8-wrap"><input id="m8-search" class="m8-input m8-grow" placeholder="Buscar código, ativo ou instituição" value="'+escape(U.search)+'"/>'+
@@ -445,7 +445,7 @@ function pageQuotes(){
   '<div class="m8-quote-prices'+(isOld?' m8-quote-outdated':'')+'"><b>'+price+'</b><strong>'+value+'</strong></div>'+
   '<button class="m8-btn sub" data-quote="'+escape(h.code)+'" '+(U.quoteLoading?'disabled':'')+'>Consultar</button></div>';
  }).join('')+(holdings.length>U.limit?'<button class="m8-btn sub" data-action="more">Ver mais</button>':''):empty('Nenhum ativo negociado identificado.'))+
- '<p class="m8-hint">Fontes: <a href="https://capitalagora.com.br/api" target="_blank" rel="noopener">Capital Agora</a> (fechamento B3) e brapi.dev, quando disponível. O valor exibido pode estar desatualizado.</p>');
+ '<p class="m8-hint">Fontes: <a href="https://capitalagora.com.br/api" target="_blank" rel="noopener">Capital Agora</a> (fechamento B3), brapi.dev e Yahoo Finance (.SA, fonte alternativa), quando disponíveis. O valor exibido pode estar desatualizado.</p>');
 }
 function pageMore(){
  return box(header('Configurações e conta','Nomes editáveis, sincronização e segurança')+
