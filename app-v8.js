@@ -477,10 +477,10 @@ function pageInsights(){
   '<button type="button" data-plan-style="'+id+'" class="'+(z.scenario===id?'active':'')+'" aria-pressed="'+(z.scenario===id)+'">'+escape(label)+'</button>').join('');
  const sections=z.segments.filter(s=>s.value>0||s.target>0);
  const chart=sections.map(s=>{
-  const max=Math.max(s.percent,s.target,1),gap=s.percent-s.target;
+  const gap=s.percent-s.target;
   return '<div class="m8-ins-segment"><div class="m8-ins-segment-head"><b>'+escape(s.short)+'</b><span>'+money(s.value)+' · '+pct(s.percent)+'</span></div>'+
     '<div class="m8-ins-track"><i style="background:'+s.color+';width:'+Math.min(100,s.percent)+'%"></i></div>'+
-    '<div class="m8-ins-segment-target"><small>Referência ilustrativa: '+pct(s.target)+'</small><span class="'+(gap>5?'m8-ins-over':'')+'">'+(gap>=0?'+':'')+pct(gap)+' p.p.</span></div></div>';
+    '<div class="m8-ins-segment-target"><small>Referência ilustrativa: '+pct(s.target)+'</small><span class="'+(gap>5?'m8-ins-over':'')+'">'+(gap>=0?'+':'')+Number(gap).toFixed(1).replace('.',',')+' p.p.</span></div></div>';
  }).join('');
  const exposure=z.all.fiis.percent+z.all.brazil.percent+z.all.global.percent+z.all.thematic.percent;
  const quality=z.tradeCount?z.priced+'/'+z.tradeCount+' posições com preço de mercado confirmado':'Sem ativos negociados';
