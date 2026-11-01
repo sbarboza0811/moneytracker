@@ -41,7 +41,7 @@ function evaluate({portfolio,quotes={},scenario='balanced',amount=1000,now=new D
  const holds=(portfolio?.holdings||[]).filter(h=>num(h.value)>=0);
  const all=Object.fromEntries(SEG.map(s=>[s.id,{...s,value:0,positions:[],percent:0,target:(TARGETS[scenario]||TARGETS.balanced)[s.id]||0}]));
  const total=round(holds.reduce((a,h)=>a+num(h.value),0));
- const traded=holds.filter(h=>!h.fixedIncome && !/tesouro/i.test(h.code||'')&&segment(h)!=='bonds');
+ const traded=holds.filter(h=>!h.fixedIncome && !/tesouro/i.test(h.code||'')&&!/tesouro/i.test(h.group||''));
  let priced=0,stale=0,unquoted=[];
  const marketDates=[];
  const weights=new Map();
