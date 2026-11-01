@@ -261,7 +261,13 @@ function portfolio(state,owner='family'){
     // A B3 position with a newer date takes precedence over an older saved quote.
     const quoteDay=String(q?.marketDate||q?.at||'').slice(0,10);
     const quoteTime=/^\d{4}-\d{2}-\d{2}$/.test(quoteDay)?Date.parse(quoteDay+'T12:00:00Z'):NaN;
-    // Posição B3 pode estar datada no sábado/domingo; o fechamento válido é o último dia útil.\n     const positionDate=String(x.date||'');\n     const positionTime=/^\d{4}-\d{2}-\d{2}$/.test(positionDate)?Date.parse(positionDate+'T12:00:00Z'):NaN;\n     const positionDay=Number.isFinite(positionTime)?new Date(positionTime):null;\n     if(positionDay&&positionDay.getUTCDay()===6)positionDay.setUTCDate(positionDay.getUTCDate()-1);\n     if(positionDay&&positionDay.getUTCDay()===0)positionDay.setUTCDate(positionDay.getUTCDate()-2);\n     const lastMarketDay=positionDay?positionDay.getTime():NaN;
+    // A posição B3 pode ter data de fim de semana; último pregão foi sexta-feira.
+    const positionDate=String(x.date||'');
+    const positionTime=/^\d{4}-\d{2}-\d{2}$/.test(positionDate)?Date.parse(positionDate+'T12:00:00Z'):NaN;
+    const positionDay=Number.isFinite(positionTime)?new Date(positionTime):null;
+    if(positionDay&&positionDay.getUTCDay()===6)positionDay.setUTCDate(positionDay.getUTCDate()-1);
+    if(positionDay&&positionDay.getUTCDay()===0)positionDay.setUTCDate(positionDay.getUTCDate()-2);
+    const lastMarketDay=positionDay?positionDay.getTime():NaN;
     const validSource=/brapi|capital agora|yahoo finance/i.test(String(q?.provider||''));
     const usable=validSource&&Number.isFinite(price)&&price>0&&
       Number.isFinite(quoteTime)&&quoteTime<=Date.now()+86400000&&
