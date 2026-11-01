@@ -109,7 +109,15 @@ function donut(items,total){
  return '<div class="m8-donut-box"><div class="m8-donut" style="background:conic-gradient('+css+')" aria-label="Distribuição patrimonial"><div><span>Posições</span><strong>'+money(total)+'</strong></div></div><div class="m8-donut-legend">'+items.filter(x=>x.value>0).map((x,i)=>'<button class="m8-legend-row" data-class="'+escape(x.name)+'"><i style="background:'+PALETTE[i%PALETTE.length]+'"></i><span>'+escape(x.name)+'</span><b>'+(100*x.value/total).toFixed(1).replace('.',',')+'%</b></button>').join('')+'</div></div>';
 }
 function alloc(d){const m=new Map();for(const h of d.holdings){const k=group(h.code,h.group);m.set(k,(m.get(k)||0)+Number(h.value||0));}return [...m].map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value);}
-function positionMarketDay(date){\n  if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(date||'')))return String(date||'');\n  const day=new Date(date+'T12:00:00Z');\n  if(day.getUTCDay()===6)day.setUTCDate(day.getUTCDate()-1);\n  if(day.getUTCDay()===0)day.setUTCDate(day.getUTCDate()-2);\n  return day.toISOString().slice(0,10);\n }\n function quoteMeta(code,positionDate=''){
+function positionMarketDay(date){
+ const d=String(date||'');
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(d))return d;
+ const day=new Date(d+'T12:00:00Z');
+ if(day.getUTCDay()===6)day.setUTCDate(day.getUTCDate()-1);
+ if(day.getUTCDay()===0)day.setUTCDate(day.getUTCDate()-2);
+ return day.toISOString().slice(0,10);
+}
+function quoteMeta(code,positionDate=''){
  const q=S.quotes?.[code],price=Number(q?.price);
  const date=String(q?.marketDate||q?.at||'').slice(0,10);
  const validDate=/^\d{4}-\d{2}-\d{2}$/.test(date)&&Number.isFinite(Date.parse(date+'T12:00:00Z'));
