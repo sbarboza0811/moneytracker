@@ -3,8 +3,8 @@
 const E=root.MoneyTrackerEngine;
 if(!E)throw Error('Motor financeiro indisponível');
 let S=E.newState(),auth=false,busy=false,toastTimer=null,analysis=null,derivedCache=null;
-const U={page:'home',owner:'family',period:'1y',from:'',to:'',classe:'all',grain:'month',compare:'owners',search:'',sort:'value',importOwner:'me',assetKey:'',saleId:'',historyKind:'all',limit:70,importMessage:'',quoteLoading:false,quoteProgress:'',quoteErrors:[]};
-const NAV=[['home','⌂','Início'],['portfolio','▦','Carteira'],['result','↗','Resultados'],['compare','⇄','Comparar'],['flow','◷','Fluxo'],['needs','✓','Diagnóstico']];
+const U={page:'home',owner:'family',period:'1y',from:'',to:'',classe:'all',grain:'month',compare:'owners',search:'',sort:'value',importOwner:'me',assetKey:'',saleId:'',historyKind:'all',limit:70,importMessage:'',quoteLoading:false,quoteProgress:'',quoteErrors:[],planStyle:'balanced',planAmount:1000};
+const NAV=[['home','⌂','Início'],['portfolio','▦','Carteira'],['insights','✦','Análises'],['result','↗','Resultados'],['compare','⇄','Comparar'],['flow','◷','Fluxo'],['needs','✓','Diagnóstico']];
 const money=E.money,fmt=E.fmt;
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const round=v=>Math.round((Number(v)||0)*100)/100;
@@ -240,7 +240,7 @@ function pageHome(){
  const refreshBar='<div class="m8-home-refresh"><div class="m8-home-refresh-text"><b>Atualizar cotações</b><small>'+fresh+' recentes · '+last+' últimas cotações · '+b3+' posições B3</small></div>'+
    '<button type="button" class="m8-btn primary m8-home-refresh-btn" data-action="refresh-quotes" aria-label="Atualizar cotações de todos os ativos" '+(U.quoteLoading||!codes.length?'disabled':'')+'>'+(U.quoteLoading?'⏳ Atualizando…':'↻ Atualizar agora')+'</button>'+
    '<span id="m8-quote-progress" role="status" aria-live="polite">'+escape(U.quoteProgress||'Valores de mercado conforme cotação disponível')+'</span></div>';
- return refreshBar+kpi(d)+dataNotice(d)+wealthDashboard()+
+ return refreshBar+insightHome()+kpi(d)+dataNotice(d)+wealthDashboard()+
  '<div class="m8-grid m8-two">'+box(header('Distribuição da carteira','Selecione uma classe para explorar')+donut(alloc(d),d.total))+
  box(header('Maiores posições','Acesse um ativo para ver suas operações',action('Carteira completa','portfolio',true))+d.holdings.slice().sort((a,b)=>b.value-a.value).slice(0,6).map(h=>assetRow(h,d)).join(''))+'</div>'+
  (m.some(x=>Math.abs(x.sales)+Math.abs(x.dividends)>.000001)?box(header('Lucros e proventos mensais','Resultado realizado sem ganhos em aberto',action('Ver resultados','result',true))+barChart(m.length>24?m.slice(-24):m,U.grain)):'');
@@ -455,6 +455,69 @@ function pageQuotes(){
  }).join('')+(holdings.length>U.limit?'<button class="m8-btn sub" data-action="more">Ver mais</button>':''):empty('Nenhum ativo negociado identificado.'))+
  '<p class="m8-hint">Fontes: <a href="https://capitalagora.com.br/api" target="_blank" rel="noopener">Capital Agora</a> (fechamento B3), brapi.dev e Yahoo Finance (.SA, fonte alternativa), quando disponíveis. O valor exibido pode estar desatualizado.</p>');
 }
+
+function insightData(){
+ const M=root.MoneyTrackerInsights;
+ return M?M.evaluate({portfolio:E.portfolio(S,U.owner),quotes:S.quotes||{},scenario:U.planStyle||'balanced',amount:U.planAmount||0}):null;
+}
+function insightHome(){
+ const z=insightData();
+ if(!z||!z.total)return '';
+ const top=z.segments.filter(x=>x.id!=='other').sort((a,b)=>b.percent-a.percent)[0];
+ const head='Análise inteligente da carteira';
+ const detail=top?top.short+' representa '+top.percent.toFixed(1).replace('.',',')+'% dos investimentos. Compare cenários e veja onde um novo aporte mudaria a distribuição.':'Confira a composição dos seus investimentos.';
+ return '<section class="m8-ins-home"><div><small>✦ LEITURA DINÂMICA DA CARTEIRA</small><b>'+escape(head)+'</b><p>'+escape(detail)+'</p></div><button class="m8-btn primary" data-nav="insights">Explorar análise ›</button></section>';
+}
+function pageInsights(){
+ const z=insightData();
+ if(!z)return box(empty('O módulo de análises não carregou. Atualize o aplicativo para a versão mais recente.'));
+ const pct=n=>(Number(n)||0).toFixed(1).replace('.',',')+'%';
+ const scenarioNames={protection:'Mais defensivo',balanced:'Equilibrado',growth:'Crescimento'};
+ const choices=Object.entries(scenarioNames).map(([id,label])=>
+  '<button type="button" data-plan-style="'+id+'" class="'+(z.scenario===id?'active':'')+'" aria-pressed="'+(z.scenario===id)+'">'+escape(label)+'</button>').join('');
+ const sections=z.segments.filter(s=>s.value>0||s.target>0);
+ const chart=sections.map(s=>{
+  const max=Math.max(s.percent,s.target,1),gap=s.percent-s.target;
+  return '<div class="m8-ins-segment"><div class="m8-ins-segment-head"><b>'+escape(s.short)+'</b><span>'+money(s.value)+' · '+pct(s.percent)+'</span></div>'+
+    '<div class="m8-ins-track"><i style="background:'+s.color+';width:'+Math.min(100,s.percent)+'%"></i></div>'+
+    '<div class="m8-ins-segment-target"><small>Referência ilustrativa: '+pct(s.target)+'</small><span class="'+(gap>5?'m8-ins-over':'')+'">'+(gap>=0?'+':'')+pct(gap)+' p.p.</span></div></div>';
+ }).join('');
+ const exposure=z.all.fiis.percent+z.all.brazil.percent+z.all.global.percent+z.all.thematic.percent;
+ const quality=z.tradeCount?z.priced+'/'+z.tradeCount+' posições com preço de mercado confirmado':'Sem ativos negociados';
+ const summary='<div class="m8-ins-summary"><div><small>Patrimônio analisado</small><strong>'+money(z.total)+'</strong><span>'+z.holdings+' posições</span></div>'+
+ '<div><small>Renda variável</small><strong>'+pct(exposure)+'</strong><span>FIIs, Brasil, exterior e temáticos</span></div>'+
+ '<div><small>5 maiores ativos</small><strong>'+pct(z.top5Weight)+'</strong><span>Concentração nominal</span></div></div>';
+ const risks=z.risks.map(r=>'<div class="m8-ins-risk"><span class="m8-ins-risk-dot '+escape(r.level)+'">'+(r.level==='attention'?'!':r.level==='data'?'i':'↗')+'</span><div><b>'+escape(r.name)+'</b><p>'+escape(r.detail)+'</p></div></div>').join('');
+ const contributions=z.allocations.map((r,i)=>{
+  const held=r.positions.filter(h=>h.value>0).map(h=>h.code);
+  const example=held.length?'Você já possui '+held.slice(0,3).map(x=>escape(x)).join(', ')+'.':'Não há posição atual dessa categoria.';
+  return '<div class="m8-ins-idea"><div class="m8-ins-idea-index">'+(i+1)+'</div><div><b>'+escape(r.name)+'</b>'+
+  '<p>'+escape(r.why)+'</p><small>'+example+' Produtos para comparar: '+escape(r.study)+'.</small></div><strong>'+money(r.allocation)+'</strong></div>';
+ }).join('');
+ const presets=[500,1000,5000].map(n=>'<button data-plan-amount="'+n+'" class="m8-ins-chip '+(z.invest===n?'active':'')+'">'+money(n)+'</button>').join('');
+ const date=z.quoteDate?E.dateBR(z.quoteDate):'não identificada';
+ return '<div class="m8-ins-intro"><span>✦ ANÁLISE PATRIMONIAL</span><h2>O que sua carteira está dizendo?</h2>'+
+ '<p>Diagnóstico automático da composição atual, com cenários de diversificação e aportes hipotéticos. Atualiza quando a carteira ou as cotações mudam.</p></div>'+
+ summary+
+ box(header('Distribuição atual × cenário','Escolha apenas uma referência de comparação, não um perfil definido para você.')+
+ '<div class="m8-ins-toggle" aria-label="Cenário de alocação">'+choices+'</div>'+
+ '<div class="m8-ins-chart">'+chart+'</div>'+
+ '<p class="m8-hint">Metas ilustrativas configuradas pelo simulador, não um modelo de suitability pessoal. As porcentagens somam 100% e incluem apenas os valores conhecidos.</p>')+
+ box(header('Simular próximo aporte','Como o valor hipotético poderia reduzir os desvios do cenário escolhido')+
+ '<div class="m8-ins-amount"><div>'+presets+'</div><label>Outro valor (R$) <input type="number" id="m8-ins-amount" min="0" max="1000000000" step="100" inputmode="decimal" class="m8-input" value="'+z.invest+'"></label></div>'+
+ (z.invest>0&&z.total>0?'<div class="m8-ins-proposal"><small>SIMULAÇÃO DE APORTE — '+escape(scenarioNames[z.scenario])+'</small><strong>'+money(z.invest)+'</strong><span>Distribuição proporcional aos maiores desvios abaixo da referência, sem exigir venda de ativos</span></div>'+
+ '<div class="m8-ins-ideas">'+(contributions||empty('Nenhuma categoria abaixo da referência neste cenário.'))+'</div>':
+ '<p class="m8-hint">Informe um valor de aporte e tenha posições importadas para exibir a simulação.</p>')+
+ '<p class="m8-hint">Os valores são exemplos para estudo, não ordens de compra ou previsão de retorno. Antes de investir, avalie custos, liquidez, prazo, risco e o seu perfil.</p>')+
+ box(header('Pontos de atenção','Leitura automática das exposições e dos dados disponíveis')+
+ (risks||empty('Nenhum alerta pelas regras de concentração atuais.')))+
+ box(header('Qualidade dos dados','Transparência das referências usadas pelo diagnóstico')+
+ '<div class="m8-ins-data"><div><b>'+escape(quality)+'</b><span>Cotações confirmadas na carteira</span></div><div><b>'+escape(date)+'</b><span>Data do pregão mais recente salvo</span></div></div>'+
+ '<p class="m8-hint">Tesouro Direto e renda fixa sem atualização não são considerados cotação ao vivo. O simulador usa o último valor confiável disponível. Direitos de subscrição sem preço não geram valor fictício.</p>'+
+ '<div class="m8-ins-foot-actions">'+action('Atualizar cotações','quotes',true)+' '+action('Ver diagnóstico de dados','needs',true)+'</div>')+
+ '<p class="m8-ins-disclaimer">O diagnóstico é calculado por regras transparentes a partir do seu patrimônio importado, não por uma IA preditiva. Não substitui uma avaliação de suitability, não estima retorno futuro e não executa operações. <a href="https://www.gov.br/investidor/pt-br/investir/antes-de-investir/respeite-o-seu-perfil-de-investidor/entenda-o-suitability" target="_blank" rel="noopener">Entenda o perfil de investidor (CVM)</a>.</p>';
+}
+
 function pageMore(){
  return box(header('Configurações e conta','Nomes editáveis, sincronização e segurança')+
  '<div class="m8-theme-settings"><div><b>Aparência</b><small>'+(currentTheme()==='dark'?'Tema escuro ativado':'Tema claro ativado')+'</small></div><button type="button" class="m8-btn sub" data-action="theme-toggle">'+(currentTheme()==='dark'?'☀ Usar tema claro':'☾ Usar tema escuro')+'</button></div>'+
@@ -464,10 +527,10 @@ function pageMore(){
  '<div><h3>Sincronização</h3><p id="mt7-cloud-status">'+escape(root.MoneyTrackerCloudV7?.status||'Verificando…')+'</p><div class="m8-actions"><button class="m8-btn sub" data-action="sync">Sincronizar</button><button class="m8-btn sub" data-action="backup">Exportar backup</button><button class="m8-btn sub" data-action="restore-pick">Restaurar backup</button><button class="m8-btn sub" data-action="logout">Sair da conta</button></div></div></div>'+
  '<input type="file" id="m8-restore" accept=".json,application/json" hidden>')+
  box(header('Ferramentas','Importar e verificar seus dados')+
- '<div class="m8-quick">'+[['import','⇧','Importar B3'],['history','≡','Histórico completo'],['income','↓','Proventos'],['quotes','◉','Cotações'],['needs','✓','Diagnóstico']].map(([id,ic,label])=>'<button class="m8-quicklink" data-nav="'+id+'"><span>'+ic+'</span>'+label+' <b>›</b></button>').join('')+'</div>');
+ '<div class="m8-quick">'+[['import','⇧','Importar B3'],['history','≡','Histórico completo'],['income','↓','Proventos'],['quotes','◉','Cotações'],['insights','✦','Análises'],['needs','✓','Diagnóstico']].map(([id,ic,label])=>'<button class="m8-quicklink" data-nav="'+id+'"><span>'+ic+'</span>'+label+' <b>›</b></button>').join('')+'</div>');
 }
 function layout(content){
- const titles={home:'Visão geral',portfolio:'Carteira e alocação',result:'Resultados e rentabilidade',compare:'Comparações integradas',flow:'Origem do patrimônio',needs:'Diagnóstico financeiro',asset:'Detalhe do ativo',sale:'Detalhe da venda',income:'Proventos',history:'Histórico',import:'Importação B3',more:'Configurações',quotes:'Cotações'};
+ const titles={home:'Visão geral',portfolio:'Carteira e alocação',result:'Resultados e rentabilidade',compare:'Comparações integradas',insights:'Análises e oportunidades',flow:'Origem do patrimônio',needs:'Diagnóstico financeiro',asset:'Detalhe do ativo',sale:'Detalhe da venda',income:'Proventos',history:'Histórico',import:'Importação B3',more:'Configurações',quotes:'Cotações'};
  const nav= id=>U.page===id?' active':'';
  const dark=currentTheme()==='dark';
  const themeButton='<button type="button" class="m8-iconbtn m8-theme-toggle" data-action="theme-toggle" title="'+(dark?'Usar tema claro':'Usar tema escuro')+'" aria-label="'+(dark?'Usar tema claro':'Usar tema escuro')+'" aria-pressed="'+dark+'">'+(dark?'☀':'☾')+'</button>';
@@ -481,14 +544,14 @@ function layout(content){
  '<div class="m8-side-label">FERRAMENTAS</div><nav>'+[['income','↓','Proventos'],['history','≡','Histórico'],['import','⇧','Importar B3'],['quotes','◉','Cotações'],['more','⚙','Configurações']].map(([id,ico,l])=>'<button data-nav="'+id+'" class="'+nav(id)+'"><span>'+ico+'</span>'+l+'</button>').join('')+'</nav>'+
  '<div class="m8-side-foot">MoneyTracker 2.0<small>Dados privados · Supabase</small></div></aside>'+
  '<div class="m8-main"><header class="m8-top"><div><span class="m8-eyebrow">MONEYTRACKER / '+escape(me(U.owner))+'</span><h1>'+escape(titles[U.page]||'Visão geral')+'</h1></div><div class="m8-topright">'+themeButton+'<button class="m8-btn sub" data-nav="import">⇧ Importar</button><button class="m8-iconbtn" data-nav="more" aria-label="Configurações">⚙</button></div></header>'+
- filters+'<main class="m8-content">'+content+'</main></div>'+
- '<nav class="m8-bottom">'+[['home','⌂','Início'],['portfolio','▦','Carteira'],['result','↗','Resultados'],['compare','⇄','Comparar'],['more','☰','Mais']].map(([id,ico,l])=>'<button class="'+nav(id)+'" data-nav="'+id+'"><b>'+ico+'</b><span>'+l+'</span></button>').join('')+'</nav></div>';
+(U.page==='insights'?'<div class="m8-toolbar m8-ins-owner"><div class="m8-toggle">'+ownerButtons+'</div><small>Análise da posição completa do titular</small></div>':filters)+'<main class="m8-content">'+content+'</main></div>'+
+ '<nav class="m8-bottom">'+[['home','⌂','Início'],['portfolio','▦','Carteira'],['insights','✦','Análise'],['result','↗','Resultados'],['more','☰','Mais']].map(([id,ico,l])=>'<button class="'+nav(id)+'" data-nav="'+id+'"><b>'+ico+'</b><span>'+l+'</span></button>').join('')+'</nav></div>';
 }
 function render(){
  const target=el('mt7-app');if(!target)return;
  let html;
  try{html=({
-  home:pageHome,portfolio:pagePortfolio,result:pageResult,compare:pageCompare,flow:pageFlow,needs:pageNeeds,asset:pageAsset,sale:pageSale,
+  home:pageHome,portfolio:pagePortfolio,insights:pageInsights,result:pageResult,compare:pageCompare,flow:pageFlow,needs:pageNeeds,asset:pageAsset,sale:pageSale,
   income:pageIncome,history:pageHistory,import:pageImport,quotes:pageQuotes,more:pageMore
  })[U.page]?.()||pageHome();}
  catch(err){console.error('Erro ao renderizar a tela',err);html=box('<h2>Não foi possível abrir esta tela</h2><p>'+escape(err.message||'Falha inesperada')+'</p>'+action('Voltar ao início','home',true));}
@@ -584,7 +647,9 @@ function listen(){
   const b=ev.target.closest('button,[data-month]');if(!b)return;
   if(b.dataset.nav)return navigate(b.dataset.nav);
   if(b.dataset.owner){U.owner=b.dataset.owner;derivedCache=null;analysis=null;U.classe='all';return render();}
-  if(b.dataset.period){U.period=b.dataset.period;U.showCustom=b.dataset.period==='custom';return render();}
+  if(b.dataset.planStyle){U.planStyle=b.dataset.planStyle;return render();}
+ if(b.dataset.planAmount){U.planAmount=Number(b.dataset.planAmount);return render();}
+ if(b.dataset.period){U.period=b.dataset.period;U.showCustom=b.dataset.period==='custom';return render();}
   if(b.dataset.grain){U.grain=b.dataset.grain;return render();}
   if(b.dataset.resultView){U.resultView=b.dataset.resultView;U.limit=70;return render();}
   if(b.dataset.compare){U.compare=b.dataset.compare;return render();}
@@ -613,6 +678,7 @@ function listen(){
   if(t.dataset.select==='class'){U.classe=t.value;return render();}
   if(t.dataset.select==='sort'){U.sort=t.value;return render();}
   if(t.dataset.date){U[t.dataset.date]=t.value;U.period='custom';return render();}
+  if(t.id==='m8-ins-amount'){U.planAmount=Math.min(1000000000,Math.max(0,Number(t.value)||0));return render();}
   if(t.id==='m8-import-owner'){U.importOwner=t.value;return;}
   if(t.id==='m8-file'){await importFiles(Array.from(t.files||[]));return;}
   if(t.id==='m8-restore'){
