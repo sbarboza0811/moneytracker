@@ -31,6 +31,7 @@ async function remoteRead(){
  setStatus(row?'Sincronizado · '+new Date(row.updated_at).toLocaleString('pt-BR'):'Conta nova · importar B3');
 }
 async function enter(u){
+ root.MoneyTrackerAI?.reset?.();
  user=u;queued=null;saveBlocked=false;setStatus('Carregando dados…');
  await remoteRead();
  A.loginReady(u);
@@ -103,6 +104,7 @@ async function logout(){
  }
  const result=await client.auth.signOut();
  if(result.error){A.notify('Não foi possível sair: '+result.error.message,true);return;}
+ root.MoneyTrackerAI?.reset?.();
  user=null;remoteRevision=null;A.setState(E.newState());loginNeeded('Você saiu da conta.');
  setStatus('Sessão encerrada');
 }
@@ -129,6 +131,18 @@ async function quote(symbol){
   throw Error(msg);
  }
  if(!data||!(Number(data.price)>0))throw Error(data?.error||'Preço não encontrado.');
+ return data;
+}
+async function ai(body){
+ if(!user||!client)throw Error('Entre na conta para usar a análise por IA.');
+ const {data,error}=await client.functions.invoke('moneytracker-ai',{body});
+ if(error){
+  let message=error.message||'Não foi possível acessar a IA.';
+  let code='';
+  try{const details=await error.context?.json();if(details?.error)message=details.error;if(details?.code)code=details.code;}catch(_){}
+  const exception=new Error(message);exception.code=code;throw exception;
+ }
+ if(!data)throw Error('A IA não retornou uma resposta.');
  return data;
 }
 async function init(){
@@ -164,6 +178,6 @@ async function init(){
   }else loginNeeded(err.message||'Faça login novamente.');
  }
 }
-root.MoneyTrackerCloudV7=Object.assign(cloud,{scheduleSave,sync,logout,quote,reloadCloud});
+root.MoneyTrackerCloudV7=Object.assign(cloud,{scheduleSave,sync,logout,quote,ai,reloadCloud});
 init();
 })(window);
