@@ -2,7 +2,7 @@
 'use strict';
 // Chat state is intentionally ephemeral: no conversation content is stored in the B3 database.
 const sessions={me:[],spouse:[],family:[]};
-let running=false,error='',connected=null,statusLoading=false,reportedModel='';
+let running=false,error='',connected=null,statusLoading=false,statusChecked=false,reportedModel='';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;',"'":'&#39;'}[c]));
 const own=()=>{const o=root.MoneyTrackerAppV7?.getUi?.()?.owner;return sessions[o]?o:'family';};
 const messages=()=>sessions[own()];
@@ -14,11 +14,12 @@ const examples=[
  ['Comparar meus ETFs','Compare BOVA11, DIVO11, BEST11, IVVB11, TECK11 e CHIP11 em relação à minha carteira, explicando sobreposição e possíveis lacunas.']
 ];
 function panel(){
+ if(!statusChecked&&!statusLoading){statusChecked=true;Promise.resolve().then(()=>status(true));}
  const list=messages();
  const actionButtons=examples.map((x,i)=>'<button type="button" class="m8-ai-example" data-ai-example="'+i+'">'+esc(x[0])+'</button>').join('');
  const badge=connected===true?'<span class="m8-ai-status is-ready">IA conectada</span>':
   connected===false?'<span class="m8-ai-status is-off">Chave de IA pendente</span>':
-  '<span class="m8-ai-status">Verificando conexão…</span>';
+  '<span class="m8-ai-status">Conexão a verificar</span>';
  const info=connected===false?
    '<div class="m8-ai-config"><b>Ativação necessária</b><p>Adicione a chave da API da OpenAI como <code>OPENAI_API_KEY</code> nas Secrets do projeto MoneyTracker no Supabase. A chave fica no servidor, nunca no aplicativo. Uma assinatura do ChatGPT não inclui créditos de API.</p></div>':'';
  const history=list.length?'<div class="m8-ai-messages">'+list.map(m=>
@@ -66,7 +67,7 @@ async function ask(question){
 }
 function reset(){
  for(const o of Object.keys(sessions))sessions[o]=[];
- running=false;error='';connected=null;statusLoading=false;reportedModel='';
+ running=false;error='';connected=null;statusLoading=false;statusChecked=false;reportedModel='';
 }
 document.addEventListener('submit',ev=>{
  if(ev.target?.id!=='m8-ai-form')return;
