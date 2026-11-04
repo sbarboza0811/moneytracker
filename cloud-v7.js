@@ -78,6 +78,32 @@ function scheduleSave(snapshot){
  if(!saveBlocked){clearTimeout(saveTimer);saveTimer=setTimeout(sendPending,650);}
  else setStatus('Alterações locais não sincronizadas. Exporte backup.',true);
 }
+// Keep active tabs in sync when another device updates prices, trades or positions.
+// Never overwrite local pending/unsaved changes or an active quote/import operation.
+let refreshingRemote=false,lastRevisionCheck=0;
+async function refreshIfChanged(){
+ if(!user||!client||queued||saving||saveBlocked||refreshingRemote||A?.isBusy?.())return false;
+ const now=Date.now();
+ if(now-lastRevisionCheck<45000)return false;
+ refreshingRemote=true;lastRevisionCheck=now;
+ try{
+  const meta=await client.from('moneytracker_snapshots').select('updated_at').eq('user_id',user.id).maybeSingle();
+  if(meta.error)throw meta.error;
+  if(!meta.data?.updated_at||meta.data.updated_at===remoteRevision)return false;
+  const next=await client.from('moneytracker_snapshots').select('data,updated_at').eq('user_id',user.id).maybeSingle();
+  if(next.error)throw next.error;
+  if(queued||saving||saveBlocked||A?.isBusy?.())return false;
+  if(!next.data||!validateState(next.data.data))throw Error('Dados remotos em formato inválido');
+  A.setState(next.data.data);
+  remoteRevision=next.data.updated_at;
+  setStatus('Atualizado de outro dispositivo · '+new Date(next.data.updated_at).toLocaleString('pt-BR'));
+  A.notify('Carteira sincronizada automaticamente');
+  return true;
+ }catch(err){
+  console.warn('MoneyTracker: não foi possível consultar atualizações remotas',err);
+  return false;
+ }finally{refreshingRemote=false;}
+}
 async function sync(){
  if(!user)return loginNeeded();
  if(queued){
@@ -189,6 +215,6 @@ async function init(){
   }else loginNeeded(err.message||'Faça login novamente.');
  }
 }
-root.MoneyTrackerCloudV7=Object.assign(cloud,{scheduleSave,sync,logout,quote,ai,reloadCloud});
+root.MoneyTrackerCloudV7=Object.assign(cloud,{scheduleSave,sync,refreshIfChanged,logout,quote,ai,reloadCloud});
 init();
 })(window);
