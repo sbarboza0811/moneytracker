@@ -215,6 +215,6 @@ async function init(){
   }else loginNeeded(err.message||'Faça login novamente.');
  }
 }
-root.MoneyTrackerCloudV7=Object.assign(cloud,{scheduleSave,sync,refreshIfChanged,logout,quote,ai,reloadCloud});
+root.MoneyTrackerCloudV7=Object.assign(cloud,{scheduleSave,sync,refreshIfChanged,hasUnsaved:()=>!!queued||saving||saveBlocked,logout,quote,ai,reloadCloud});
 init();
 })(window);
