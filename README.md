@@ -29,8 +29,16 @@ Aplicação web **independente** do TestoTracker e do Home Architect.
 - Posições de custo estimadas a partir do histórico, distribuição, metas, cenários e análises baseadas em regras.
 - Conta própria, acesso privado e sincronização com Supabase.
 
-As informações da B3 não são sincronizadas automaticamente; importação manual continua necessária. Não fornece cotações em tempo real ou recomendações geradas por IA conectada. A publicação no GitHub Pages depende da configuração descrita acima.
+As informações da B3 não são sincronizadas automaticamente; a importação manual continua necessária. Cotações armazenadas podem estar desatualizadas. O Consultor IA utiliza Google Gemini via Supabase Edge Function, quando a chave estiver configurada. O modelo não executa compras ou vendas.
 
 ## Segurança
 
 No navegador, use apenas a **publishable key** do Supabase. **Jamais** inclua `service_role`, senhas ou arquivos financeiros no GitHub. A tabela tem RLS e só autoriza operações do próprio usuário autenticado. Backup ainda é recomendado.
+
+## Consultor IA com Gemini (MoneyTracker 2.6.1)
+
+1. Acesse [Google AI Studio — API Keys](https://aistudio.google.com/api-keys) e crie uma chave de API Gemini (modalidade gratuita disponível sujeita a limites).
+2. Abra [Supabase — Edge Function Secrets](https://supabase.com/dashboard/project/xdpdmcihbqjerduxhagm/functions/secrets) e salve essa chave sob o nome `GEMINI_API_KEY`. **Nunca salve o valor no GitHub nem na página do aplicativo.**
+3. Entre no aplicativo → **Análises → Consultor IA** → **Conferir conexão**. Depois envie uma pergunta para testar uma resposta real.
+
+A função `moneytracker-ai` usa por padrão `gemini-3.8-flash`; opcionalmente, `GEMINI_MODEL` altera o modelo no ambiente do Supabase. O endpoint exige sessão autenticada e lê apenas dados financeiros vinculados ao usuário autenticado. O Gemini recebe um resumo das posições (códigos, quantidades e valores), a pergunta e até seis mensagens anteriores da sessão, não a senha nem todo o histórico de lançamentos. No plano gratuito do Gemini, o conteúdo enviado pode ser usado pelo Google para melhorar produtos; evite incluir dados pessoais nos prompts. A chave fica exclusivamente em uma secret no Supabase. O backend não grava o histórico de perguntas na base de investimentos.
