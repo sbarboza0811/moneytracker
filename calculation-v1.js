@@ -42,9 +42,15 @@ function basis(holding,state,ledger,positions){
  }
  return{cost:null,verified:false,nominal:false,reason:'Custo ou quantidade ainda não conciliado'};
 }
+function isZeroValueRight(h){
+ return amount(h.value)===0&&/^[A-Z]{4}1[23]$/.test(E.codeOf(h.code));
+}
 function openGain(holdings,state,ledger,positions){
  let gain=0,cost=0,matched=0,missing=0,incomePending=0,nominalValue=0;
  for(const h of holdings){
+  // B3 subscription rights without market value do not represent a missing
+  // acquisition cost or an open profit; align with E.gains.
+  if(isZeroValueRight(h))continue;
   const b=basis(h,state,ledger,positions||holdings);
   if(b.nominal){incomePending++;nominalValue+=amount(h.value);continue;}
   if(!b.verified){missing++;continue;}
@@ -78,7 +84,7 @@ function aggregate(holdings){
    const entry=map.get(key)||{key,value:0,qty:0,count:0,openGain:0,cost:0,unverified:0};
    entry.value+=value;entry.qty+=qty;entry.count++;
    if(h.calculation?.verified){entry.cost+=amount(h.calculation.cost);entry.openGain+=amount(h.calculation.openGain);}
-   else if(!h.fixedIncome)entry.unverified++;
+   else if(!h.fixedIncome&&!isZeroValueRight(h))entry.unverified++;
    map.set(key,entry);
   }
  }
@@ -99,7 +105,7 @@ function calculate(state,who='family',today=E.isoNow()){
  const holdings=positions.map(h=>{
   const b=basis(h,state,ledger,positions),value=round(h.value);
   return{...h,calculation:{
-    cost:b.verified?round(b.cost):null,verified:b.verified,nominal:!!b.nominal,reason:b.reason||null,
+    cost:b.verified?round(b.cost):null,verified:b.verified,nominal:!!b.nominal,reason:isZeroValueRight(h)?'Direito sem valor de mercado; não há lucro em aberto':(b.reason||null),
     openGain:b.verified?round(value-b.cost):null,
     returnPercent:b.verified&&b.cost>0?100*(value-b.cost)/b.cost:null,
     weight:base.total>0?100*value/base.total:0
