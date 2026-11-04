@@ -26,6 +26,7 @@ jobs:
           node --check calculation-v1.js
           node --check app-v8.js
           node --check cloud-v7.js
+          node --check install-v7.js
           node tests/calculation-smoke.test.js
           node tests/auto-refresh.test.js
       - name: Setup Pages
