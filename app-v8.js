@@ -159,7 +159,7 @@ function totalReconciliation(d){
  const date=U.owner==='me'?S.positionSnapshot?.date:U.owner==='spouse'?S.spousePositionSnapshot?.date:null;
  const r=(name,value,desc)=>'<div class="m8-tx"><div><b>'+escape(name)+'</b><small>'+escape(desc||'')+'</small></div><strong>'+money(value)+'</strong></div>';
  const result=box(header('Conferência dos totais',date?'Posição B3 registrada em '+E.dateBR(date):'Separação por origem dos valores')+
-   r('Posição oficial B3',b3,'23 ativos de Samuel no relatório; sem cotações de outras fontes')+
+   r('Posição oficial B3',b3,'Soma das posições oficiais B3; antes das cotações externas')+
    (Math.abs(quotes)>0.005?r('Ajuste por cotações',quotes,'Últimos preços salvos, diferentes do arquivo B3'):'')+
    (bank>0.005?r('Renda fixa fora da B3',bank,'RDB / LCI registrados manualmente, saldo nominal'):'')+
    (estimated>0.005?r('Outros valores estimados',estimated,'Sem posição B3 confirmada'):'')+
@@ -387,7 +387,7 @@ function pageFlow(){
  iconStat('Custo conciliado',money(changes.cost),changes.matched+' posições avaliadas','orange','flow')+
  iconStat('Valorização identificada',changes.matched?money(changes.gain):'—','Ganho em aberto onde calculável','teal','result')+
  iconStat('Renda fixa nominal',money(changes.nominalValue),changes.incomePending+' aplicações sem juros atualizados','violet','portfolio')+'</div>'+
- wealthDashboard(true)+
+ totalReconciliation(d)+wealthDashboard(true)+
  (unknown>0?box(header('Valores sem custo conciliado','Posições que ainda exigem base documental')+'<p><strong>'+money(unknown)+'</strong> em '+changes.missing+' posição(ões).</p>'):'');
 }
 function analyze(){analysis={state:S,owner:U.owner,issues:E.gaps(S,U.owner),at:new Date().toISOString()};}
