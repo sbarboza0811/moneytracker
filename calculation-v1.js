@@ -126,6 +126,12 @@ function calculate(state,who='family',today=E.isoNow()){
  // A missing acquisition cost is not a calculation error; it remains visible.
  if(open.matched>0&&gains.openGain!=null)
   audits.push(check('open-profit','Valorização calculada = resultado do motor',amount(gains.openGain),open.gain));
+ if(owner==='family'){
+  const me=calculate(state,'me',today),spouse=calculate(state,'spouse',today);
+  audits.push(check('family-total','Samuel + Jessica = Família',me.total+spouse.total,total));
+  audits.push(check('family-sales','Lucro realizado Samuel + Jessica',me.realized+spouse.realized,realized));
+  audits.push(check('family-income','Proventos Samuel + Jessica',me.dividends+spouse.dividends,dividends));
+ }
  const result={owner,p,ledger,d:detail,g:gains,holdings,rollup,sources,openGain:open,realized,dividends,
   total,checks:audits,valid:audits.every(x=>x.ok),issues:audits.filter(x=>!x.ok)};
  memo.set(key,result);
