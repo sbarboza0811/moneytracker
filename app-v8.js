@@ -9,6 +9,24 @@ const NAV=[['home','⌂','Início'],['portfolio','▦','Carteira'],['insights','
 const money=E.money,fmt=E.fmt;
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const round=v=>Math.round((Number(v)||0)*100)/100;
+const AUTO_QUOTE_REFRESH_MS=20*60*1000;
+function quoteReferenceDay(){
+ const d=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+ return positionMarketDay(d);
+}
+function refreshWhileVisible(){
+ if(!auth||document.visibilityState==='hidden'||U.quoteLoading)return;
+ Promise.resolve(root.MoneyTrackerCloudV7?.refreshIfChanged?.())
+  .catch(err=>console.warn('Falha na sincronização automática',err))
+  .finally(()=>refreshAllQuotes(true));
+}
+function installAutoRefresh(){
+ if(root.__mtQuoteLoopInstalled)return;
+ root.__mtQuoteLoopInstalled=true;
+ root.setInterval(refreshWhileVisible,AUTO_QUOTE_REFRESH_MS);
+ document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshWhileVisible();});
+ root.addEventListener('focus',refreshWhileVisible);
+}
 const mobileChart=()=>!!root.matchMedia?.('(max-width:790px)').matches;
 const chartMinWidth=()=>Math.max(255,Math.min(640,(Number(root.innerWidth)||390)-66));
 const currentTheme=()=>document.documentElement.dataset.theme==='light'?'light':'dark';
@@ -96,12 +114,12 @@ function pricedHoldings(){
  return initialData(U.owner).holdings.filter(h=>!h.fixedIncome&&h.group!=='Tesouro'&&/^[A-Z][A-Z0-9]{3,11}$/.test(h.code));
 }
 function quoteSummary(){
- const positions=pricedHoldings(),unique=[...new Set(positions.map(h=>h.code))];
- const recent=[...new Set(positions.filter(h=>h.origin==='quote'&&!h.quoteStale).map(h=>h.code))].length;
- const cached=[...new Set(positions.filter(h=>h.origin==='quote'&&h.quoteStale).map(h=>h.code))].length;
+ const positions=pricedHoldings(),unique=[...new Set(positions.map(h=>h.code))],ref=quoteReferenceDay();
+ const sameDay=[...new Set(positions.filter(h=>h.origin==='quote'&&h.quoteDate===ref).map(h=>h.code))].length;
+ const otherDays=[...new Set(positions.filter(h=>h.origin==='quote'&&h.quoteDate!==ref).map(h=>h.code))].length;
  const retained=positions.filter(h=>h.origin==='quote').reduce((v,h)=>v+Number(h.value||0),0);
- return '<div class="m8-quote-summary"><div><small>Cotações recentes</small><strong>'+recent+' / '+unique.length+'</strong></div>'+
- '<div><small>Última cotação salva</small><strong>'+cached+' ativo(s)</strong></div>'+
+ return '<div class="m8-quote-summary"><div><small>Cotação com data '+escape(E.dateBR(ref))+'</small><strong>'+sameDay+' / '+unique.length+'</strong></div>'+
+ '<div><small>Data anterior</small><strong>'+otherDays+' ativo(s)</strong></div>'+
  '<div><small>Valor com cotação salva</small><strong>'+money(retained)+'</strong></div></div>';
 }
 function quoteUpdateControls(){
@@ -112,7 +130,7 @@ function quoteUpdateControls(){
 function assetRow(h,d){
  const b=basisFor(h,d.ledger),gain=b.verified?money(h.value-b.cost):'—';
  const priceInfo=!h.fixedIncome&&(h.origin==='quote'?(h.quoteStale?' · Últ. cot. ':' · Cot. ')+money(h.unit)+'/un.':h.snapshotPrice>0?' · B3 '+money(h.snapshotPrice)+'/un.':'');
- return '<button class="m8-asset-row" data-asset="'+escape(h.owner+'|'+h.code)+'"><span class="m8-token">'+escape(h.fixedIncome?'RF':h.code.slice(0,2))+'</span><span class="m8-asset-title"><strong>'+escape(h.code)+'</strong><small>'+escape(me(h.owner))+' · '+escape(group(h.code,h.group))+(h.fixedIncome?' · Saldo nominal':'')+priceInfo+'</small></span><span class="m8-asset-money"><strong>'+money(h.value)+'</strong><small class="'+(b.verified?'positive':'muted')+'">'+gain+'</small></span><b>›</b></button>';
+ return '<button class="m8-asset-row" data-asset="'+escape(h.owner+'|'+h.code)+'"><span class="m8-token">'+escape(h.fixedIncome?'RF':h.code.slice(0,2))+'</span><span class="m8-asset-title"><strong>'+escape(h.code)+'</strong><small>'+escape(me(h.owner))+' · '+escape(group(h.code,h.group))+(h.fixedIncome?' · Saldo nominal':'')+priceInfo+(h.origin==='quote'&&h.quoteDate?' · pregão '+E.dateBR(h.quoteDate):'')+'</small></span><span class="m8-asset-money"><strong>'+money(h.value)+'</strong><small class="'+(b.verified?'positive':'muted')+'">'+gain+'</small></span><b>›</b></button>';
 }
 function kpi(d){return '<div class="m8-kpis">'+iconStat('Patrimônio representado',money(d.total),d.holdings.length+' posições · B3 + cotações + renda fixa adicional','blue','portfolio')+iconStat('Resultado realizado',money(d.realized+d.dividends),'Vendas + proventos do período','teal','result')+iconStat('Proventos',money(d.dividends),d.payouts.length+' pagamentos','violet','income')+iconStat('Valorização apurada',d.openGain.matched?money(d.openGain.gain):'—',d.openGain.missing+' posições sem valorização','orange','flow')+'</div>';}
 function totalReconciliation(d){
@@ -155,12 +173,16 @@ function lineChart(points,format='money'){
  return '<div class="m8-plot"><svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" aria-label="Evolução dos valores registrados"><defs><linearGradient id="m8area" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#567af3" stop-opacity=".20"/><stop offset="100%" stop-color="#567af3" stop-opacity="0"/></linearGradient></defs><path d="'+path+' L'+x(points.length-1)+' '+(h-pad)+' L'+pad+' '+(h-pad)+'Z" fill="url(#m8area)"/><path d="'+path+'" fill="none" stroke="#5078ee" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'+circles+'<text x="'+pad+'" y="'+(h-5)+'" fill="#8593a8" font-size="11">'+escape(E.dateBR(points[0].date))+'</text><text x="'+(w-pad)+'" y="'+(h-5)+'" text-anchor="end" fill="#8593a8" font-size="11">'+escape(E.dateBR(points.at(-1).date))+'</text></svg></div>';
 }
 function dataNotice(d){
- const old=d.holdings.filter(h=>h.origin==='quote'&&h.quoteStale).length;
+ const old=d.holdings.filter(h=>h.origin==='quote'&&(h.quoteStale||h.quoteDate<quoteReferenceDay())).length;
  const b3=d.holdings.filter(h=>h.origin==='position'&&h.group!=='Tesouro'&&!h.fixedIncome).length;
  let notices='';
  if(old||b3)notices+='<div class="m8-notice">ℹ️ '+(old?old+' posição(ões) usam a última cotação salva, que pode estar desatualizada. ':'')+
  (b3?b3+' posição(ões) usam o último valor do relatório B3. ':'')+
  'Confira a data de referência em Cotações.</div>';
+ const owners=U.owner==='family'?['me','spouse']:[U.owner];
+ const snapshots=owners.map(o=>({owner:o,date:S[o==='spouse'?'spousePositionSnapshot':'positionSnapshot']?.date})).filter(x=>x.date);
+ const oldPositions=snapshots.filter(x=>x.date<E.isoNow());
+ if(oldPositions.length)notices+='<div class="m8-notice">As quantidades seguem o relatório B3 de '+escape(oldPositions.map(x=>me(x.owner)+' ('+E.dateBR(x.date)+')').join(', '))+'. Cotações atualizam preços, mas não registram compras ou vendas posteriores. Importe uma posição B3 mais recente para atualizar as quantidades.</div>';
  if(d.p.valuation==='mixed')notices+='<div class="m8-notice">A carteira mistura valores de mercado, valores históricos e saldos estimados. O patrimônio não representa necessariamente o preço de venda hoje.</div>';
  else if(d.p.valuation==='historical')notices+='<div class="m8-notice">Algumas posições usam custo histórico, não cotação de mercado.</div>';
  return notices;
@@ -216,10 +238,10 @@ function wealthDashboard(){
 function pageHome(){
  const d=rows(),m=getMonths(d);
  const listed=pricedHoldings(),codes=[...new Set(listed.map(h=>h.code))],
-       fresh=new Set(listed.filter(h=>h.origin==='quote'&&!h.quoteStale).map(h=>h.code)).size,
-       last=new Set(listed.filter(h=>h.origin==='quote'&&h.quoteStale).map(h=>h.code)).size,
+       fresh=new Set(listed.filter(h=>h.origin==='quote'&&h.quoteDate===quoteReferenceDay()).map(h=>h.code)).size,
+       last=new Set(listed.filter(h=>h.origin==='quote'&&h.quoteDate!==quoteReferenceDay()).map(h=>h.code)).size,
        b3=new Set(listed.filter(h=>h.origin==='position').map(h=>h.code)).size;
- const refreshBar='<div class="m8-home-refresh"><div class="m8-home-refresh-text"><b>Atualizar cotações</b><small>'+fresh+' recentes · '+last+' últimas cotações · '+b3+' posições B3</small></div>'+
+ const refreshBar='<div class="m8-home-refresh"><div class="m8-home-refresh-text"><b>Atualizar cotações</b><small>'+fresh+' com data de hoje · '+last+' de dias anteriores · '+b3+' posições B3</small></div>'+
    '<button type="button" class="m8-btn primary m8-home-refresh-btn" data-action="refresh-quotes" aria-label="Atualizar cotações de todos os ativos" '+(U.quoteLoading||!codes.length?'disabled':'')+'>'+(U.quoteLoading?'⏳ Atualizando…':'↻ Atualizar agora')+'</button>'+
    '<span id="m8-quote-progress" role="status" aria-live="polite">'+escape(U.quoteProgress||'Valores de mercado conforme cotação disponível')+'</span></div>';
  return refreshBar+insightHome()+kpi(d)+totalReconciliation(d)+dataNotice(d)+wealthDashboard()+
@@ -578,10 +600,10 @@ async function refreshAllQuotes(auto=false,symbols=null){
  if(symbols)codes=codes.filter(x=>symbols.includes(x));
  if(auto){
   const now=Date.now();let last=0;
-  try{last=Number(root.localStorage.getItem('moneytracker-quotes-autorefresh-v245')||0);}catch(_){}
-  if(now-last<6*3600000)return;
-  try{root.localStorage.setItem('moneytracker-quotes-autorefresh-v245',String(now));}catch(_){}
-  codes=codes.filter(x=>!quoteMeta(x).fresh||now-Date.parse(S.quotes[x].at)>6*3600000);
+  try{last=Number(root.localStorage.getItem('moneytracker-quotes-autorefresh-v271')||0);}catch(_){}
+  if(now-last<AUTO_QUOTE_REFRESH_MS)return;
+  codes=codes.filter(x=>!quoteMeta(x).fresh||!Number.isFinite(Date.parse(S.quotes?.[x]?.at))||now-Date.parse(S.quotes[x].at)>AUTO_QUOTE_REFRESH_MS);
+  if(codes.length)try{root.localStorage.setItem('moneytracker-quotes-autorefresh-v271',String(now));}catch(_){}
  }
  if(!codes.length)return;
  U.quoteLoading=true;U.quoteErrors=[];U.quoteProgress='Consultando 0 de '+codes.length+' ativos…';render();
@@ -684,7 +706,7 @@ function listen(){
 }
 root.MoneyTrackerAppV7={
  getState:()=>S,setState:d=>{C.invalidate(S);S=E.normalizeState(d);derivedCache=null;analysis=null;render();},
- loginReady:()=>{auth=true;el('mt7-auth').hidden=true;render();setTimeout(()=>refreshAllQuotes(true),900);},
+ loginReady:()=>{auth=true;el('mt7-auth').hidden=true;render();installAutoRefresh();setTimeout(refreshWhileVisible,900);},
  loginNeeded:()=>{auth=false;el('mt7-auth').hidden=false;},
  getUi:()=>U,notify,render,
  onSyncError:msg=>notify(msg,true),
