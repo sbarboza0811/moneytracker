@@ -139,7 +139,18 @@ async function ai(body){
  if(error){
   let message=error.message||'Não foi possível acessar a IA.';
   let code='';
-  try{const details=await error.context?.json();if(details?.error)message=details.error;if(details?.code)code=details.code;}catch(_){}
+  try{
+    const details=await error.context?.json();
+    if(details?.error)message=String(details.error);
+    if(details?.code)code=String(details.code);
+    if(Array.isArray(details?.attempts)&&details.attempts.length){
+      const diagnostics=details.attempts
+        .slice(0,3)
+        .filter(x=>/^gemini-[a-z0-9.-]+$/i.test(String(x?.model||''))&&Number.isInteger(Number(x?.status)))
+        .map(x=>String(x.model)+' (HTTP '+String(x.status)+')');
+      if(diagnostics.length)message+=' Tentativas: '+diagnostics.join(', ')+'.';
+    }
+  }catch(_){}
   const exception=new Error(message);exception.code=code;throw exception;
  }
  if(!data)throw Error('A IA não retornou uma resposta.');
