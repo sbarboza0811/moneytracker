@@ -132,7 +132,7 @@ function calculate(state,who='family',today=E.isoNow()){
  return result;
 }
 function view(state,{owner='family',from='1900-01-01',to=E.isoNow(),className='all'}={}){
- const base=calculate(state,owner,to),matches=h=>className==='all'||classLabel(h.code,h.group)===className;
+ const base=calculate(state,owner,E.isoNow()),matches=h=>className==='all'||classLabel(h.code,h.group)===className;
  const holdings=base.holdings.filter(matches);
  const sales=(base.d?.sales||[]).filter(s=>s.date>=from&&s.date<=to&&matches(s));
  const payouts=(base.d?.payouts||E.dividendRows(state,owner)).filter(p=>p.date>=from&&p.date<=to&&matches(p));
