@@ -17,11 +17,11 @@ function panel(){
  if(!statusChecked&&!statusLoading){statusChecked=true;Promise.resolve().then(()=>status(true));}
  const list=messages();
  const actionButtons=examples.map((x,i)=>'<button type="button" class="m8-ai-example" data-ai-example="'+i+'">'+esc(x[0])+'</button>').join('');
- const badge=connected===true?'<span class="m8-ai-status is-ready">IA conectada</span>':
-  connected===false?'<span class="m8-ai-status is-off">Chave de IA pendente</span>':
+ const badge=connected===true?'<span class="m8-ai-status is-ready">Gemini configurado</span>':
+  connected===false?'<span class="m8-ai-status is-off">Chave Gemini pendente</span>':
   '<span class="m8-ai-status">Conexão a verificar</span>';
  const info=connected===false?
-   '<div class="m8-ai-config"><b>Ativação necessária</b><p>Adicione a chave da API da OpenAI como <code>OPENAI_API_KEY</code> nas Secrets do projeto MoneyTracker no Supabase. A chave fica no servidor, nunca no aplicativo. Uma assinatura do ChatGPT não inclui créditos de API.</p></div>':'';
+   '<div class="m8-ai-config"><b>Ativação do Gemini</b><p>Crie uma chave gratuita no <a href="https://aistudio.google.com/api-keys" target="_blank" rel="noopener noreferrer">Google AI Studio</a> e salve como <code>GEMINI_API_KEY</code> em <a href="https://supabase.com/dashboard/project/xdpdmcihbqjerduxhagm/functions/secrets" target="_blank" rel="noopener noreferrer">Secrets do Supabase</a>. Nunca compartilhe a chave ou publique no GitHub.</p></div>':'';
  const history=list.length?'<div class="m8-ai-messages">'+list.map(m=>
   '<article class="m8-ai-message '+(m.role==='assistant'?'assistant':'user')+'"><div class="m8-ai-message-head">'+(m.role==='assistant'?'✦ MoneyTracker IA':'Você')+'</div><div class="m8-ai-message-text">'+safeText(m.text)+'</div></article>').join('')+'</div>':
   '<div class="m8-ai-start"><span>✦</span><b>Seu analista de investimentos com IA</b><p>Analisa a carteira real, compara ativos e responde perguntas específicas. As respostas são geradas por um modelo de IA, não por regras fixas.</p></div>';
@@ -32,7 +32,7 @@ function panel(){
  '<div class="m8-ai-quick">'+actionButtons+'</div>'+
  '<form id="m8-ai-form" class="m8-ai-form"><label for="m8-ai-input">Pergunte à IA sobre seus investimentos</label><textarea id="m8-ai-input" rows="3" maxlength="700" placeholder="Ex.: Tenho R$ 3.000 para aportar. O que faz sentido estudar hoje na minha carteira?" '+(running?'disabled':'')+' required></textarea>'+
  '<div class="m8-ai-form-actions"><small>A IA usa seus ativos e valores salvos. Não realiza ordens.</small><button type="submit" class="m8-btn primary" '+(running?'disabled':'')+'>'+(running?'Analisando…':'✦ Analisar com IA')+'</button></div></form>'+
- '<p class="m8-ai-foot">A análise depende de uma chave de API com créditos e de preços atualizados. Dados da carteira são enviados ao provedor de IA somente quando você faz uma pergunta. Não é aconselhamento financeiro profissional.</p>'+
+ '<p class="m8-ai-foot">Quando você pergunta, o Gemini recebe códigos e valores das posições, além da pergunta. No plano gratuito, o Google pode usar o conteúdo enviado para melhorar seus produtos. Não envie dados pessoais no chat. As cotações podem estar desatualizadas. Não é aconselhamento financeiro profissional.</p>'+
  (list.length?'<button type="button" class="m8-ai-clear" data-ai-action="clear">Limpar conversa desta sessão</button>':'')+
  '</section>';
 }
@@ -49,7 +49,7 @@ async function status(silent=false){
 async function ask(question){
  const owner=own(),text=String(question||'').trim().slice(0,700);
  if(running||!text)return;
- if(connected===false){error='A IA ainda não está ativada. Configure OPENAI_API_KEY nas Secrets do Supabase.';redraw();return;}
+ if(connected===false){error='A IA ainda não está ativada. Configure GEMINI_API_KEY nas Secrets do Supabase.';redraw();return;}
  running=true;error='';const history=sessions[owner].slice(-6);
  sessions[owner].push({role:'user',text});redraw();
  try{
