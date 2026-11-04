@@ -8,14 +8,14 @@ permissions:
   pages: write
   id-token: write
 concurrency:
-  group: pages-recovery-20261104-v271
+  group: pages
   cancel-in-progress: true
 jobs:
   deploy:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
