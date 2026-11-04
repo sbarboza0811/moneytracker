@@ -1,6 +1,7 @@
 (function(root){
 'use strict';
-const E=root.MoneyTrackerEngine;
+const E=root.MoneyTrackerEngine,C=root.MoneyTrackerCalculations;
+if(!C)throw Error('Motor de recálculo central indisponível');
 if(!E)throw Error('Motor financeiro indisponível');
 let S=E.newState(),auth=false,busy=false,toastTimer=null,analysis=null,derivedCache=null;
 const U={page:'home',owner:'family',period:'1y',from:'',to:'',classe:'all',grain:'month',compare:'owners',search:'',sort:'value',importOwner:'me',assetKey:'',saleId:'',historyKind:'all',limit:70,importMessage:'',quoteLoading:false,quoteProgress:'',quoteErrors:[],planStyle:'balanced',planAmount:1000};
@@ -25,48 +26,11 @@ const today=()=>E.isoNow();
 const toNumber=s=>Number(s)||0;
 function scope(){const to=U.period==='custom'?(U.to||today()):today(),from=U.period==='custom'?(U.from||'1900-01-01'):U.period==='all'?'1900-01-01':E.cutoff(U.period,to);return{from,to};}
 function inRange(d){const r=scope();return !!d&&d>=r.from&&d<=r.to;}
-function group(code,raw){
- const g=String(raw||'');if(g==='Renda fixa')return 'Renda fixa';
- if(/tesouro/i.test(g)||/^Tesouro /i.test(code))return 'Tesouro';
- if(g==='ETF'||g==='ETFs')return 'ETFs';
- if(g==='FII'||g==='FIIs')return 'FIIs';
- if(g==='Ações / BDRs'||g==='Ações')return 'Ações';
- const c=E.classify(code,g);
- return c==='ETF'?'ETFs':c==='FII'?'FIIs':c==='Ações / BDRs'?'Ações':c==='Tesouro'?'Tesouro':c==='Fundos'?'Fundos':'Outros';
-}
-function initialData(o){
- if(derivedCache&&derivedCache.state===S&&derivedCache.owner===o)return derivedCache.data;
- const p=E.portfolio(S,o),d=E.profitBreakdown?E.profitBreakdown(S,o,'all'):null,
- ledger=E.ledger(S,o),g=E.gains(S,o,'all'),data={p,d,ledger,g};
- derivedCache={state:S,owner:o,data};return data;
-}
-function rows(){
- const z=initialData(U.owner),r=scope();
- const holdings=z.p.holdings.filter(h=>U.classe==='all'||group(h.code,h.group)===U.classe);
- const rawSales=(z.d?.sales||[]).filter(s=>s.date>=r.from&&s.date<=r.to&&(U.classe==='all'||group(s.code,s.group)===U.classe));
- const payouts=(z.d?.payouts||E.dividendRows(S,U.owner)).filter(x=>x.date>=r.from&&x.date<=r.to&&(U.classe==='all'||group(x.code,x.group)===U.classe));
- const recognized=rawSales.filter(x=>x.recognized&&Number.isFinite(Number(x.profit)));
- const saleProfit=round(recognized.reduce((n,x)=>n+Number(x.profit),0)),div=round(payouts.reduce((n,x)=>n+Number(x.amount),0));
- const total=round(holdings.reduce((n,h)=>n+Number(h.value||0),0));
- return {...z,holdings,sales:rawSales,payouts,realized:saleProfit,dividends:div,total,openGain:openGain(holdings,z.ledger),excluded:rawSales.length-recognized.length};
-}
-function basisFor(h,ledger){
- if(h.fixedIncome)return{cost:h.value,verified:false,nominal:true,reason:'Principal conhecido, juros não informados'};
- if(h.group==='Tesouro'||group(h.code,h.group)==='Tesouro'){
-  if(Number.isFinite(+h.applied)&&+h.applied>0)return{cost:+h.applied,verified:true};
-  return{cost:null,verified:false,reason:'Sem valor aplicado'};
- }
- if(h.origin!=='position'&&h.origin!=='quote')return{cost:null,verified:false,reason:'Sem cotação atual'};
- const a=ledger.stocks.get(h.owner+'|'+E.codeOf(h.code));
- if(a&&!a.uncertain&&a.qty>0&&Math.abs(a.qty-h.qty)<=Math.max(.00001,.002*h.qty))return{cost:a.cost,verified:true};
- const b=S.reconciliation?.positionBasis?.[E.codeOf(h.code)];
- if(b&&b.owner===h.owner&&Math.abs(Number(b.qty)-h.qty)<.0001&&Number(b.unitCost)>0)return{cost:h.qty*Number(b.unitCost),verified:true};
- return{cost:null,verified:false,reason:'Custo ainda não conciliado'};
-}
-function openGain(holdings,ledger){
- const a=holdings.map(h=>({...basisFor(h,ledger),h})),complete=a.filter(x=>x.verified),unknown=a.filter(x=>!x.verified&&!x.nominal),nominal=a.filter(x=>x.nominal);
- return{gain:round(complete.reduce((n,x)=>n+x.h.value-x.cost,0)),cost:round(complete.reduce((n,x)=>n+x.cost,0)),missing:unknown.length,incomePending:nominal.length,nominalValue:round(nominal.reduce((n,x)=>n+x.h.value,0)),matched:complete.length};
-}
+function group(code,raw){return C.classLabel(code,raw);}
+function initialData(o){return C.calculate(S,o);}
+function rows(){const r=scope();return C.view(S,{owner:U.owner,from:r.from,to:r.to,className:U.classe});}
+function basisFor(h,ledger){return C.basis(h,S,ledger,initialData(U.owner).holdings);}
+function openGain(holdings,ledger){return C.openGain(holdings,S,ledger,initialData(U.owner).holdings);}
 function monthly(sales,payouts,from,to){
  const map=new Map();
  function add(d,key,value){const k=d.slice(0,7);if(!map.has(k))map.set(k,{date:k,sales:0,dividends:0});map.get(k)[key]+=Number(value)||0;}
@@ -129,7 +93,7 @@ function quoteMeta(code,positionDate=''){
  return{quote:q||null,date,available,fresh,stale:available&&!fresh};
 }
 function pricedHoldings(){
- return E.portfolio(S,U.owner).holdings.filter(h=>!h.fixedIncome&&h.group!=='Tesouro'&&/^[A-Z][A-Z0-9]{3,11}$/.test(h.code));
+ return initialData(U.owner).holdings.filter(h=>!h.fixedIncome&&h.group!=='Tesouro'&&/^[A-Z][A-Z0-9]{3,11}$/.test(h.code));
 }
 function quoteSummary(){
  const positions=pricedHoldings(),unique=[...new Set(positions.map(h=>h.code))];
@@ -478,7 +442,7 @@ function pageQuotes(){
 
 function insightData(){
  const M=root.MoneyTrackerInsights;
- return M?M.evaluate({portfolio:E.portfolio(S,U.owner),quotes:S.quotes||{},scenario:U.planStyle||'balanced',amount:U.planAmount||0}):null;
+ return M?M.evaluate({portfolio:initialData(U.owner).p,quotes:S.quotes||{},scenario:U.planStyle||'balanced',amount:U.planAmount||0}):null;
 }
 function insightHome(){
  const z=insightData();
@@ -591,7 +555,7 @@ function notify(msg,bad=false){
  target.innerHTML='<div class="m8-toast '+(bad?'bad':'')+'">'+escape(msg)+'</div>';
  clearTimeout(toastTimer);toastTimer=setTimeout(()=>{target.innerHTML='';},6000);
 }
-function save(next){S=E.normalizeState(next);derivedCache=null;analysis=null;render();root.MoneyTrackerCloudV7?.scheduleSave(S);}
+function save(next){C.invalidate(S);S=E.normalizeState(next);derivedCache=null;analysis=null;render();root.MoneyTrackerCloudV7?.scheduleSave(S);}
 function download(filename,txt){const url=URL.createObjectURL(new Blob([txt],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);}
 async function importFiles(files){
  if(!auth)return notify('Entre na sua conta antes de importar.',true);
@@ -601,7 +565,7 @@ async function importFiles(files){
   const r=await E.importXlsx(S,U.importOwner,files,root.MoneyTrackerExcel);
   const changed=r.summary.added>0||r.summary.positionsChanged>0;
   if(changed){
-   S=E.normalizeState(r.next);derivedCache=null;analysis=null;
+   C.invalidate(S);S=E.normalizeState(r.next);derivedCache=null;analysis=null;
    root.MoneyTrackerCloudV7?.scheduleSave(S);
   }
   U.importMessage=r.summary.added+' operações novas · '+r.summary.duplicates+' já existentes ignoradas · '+r.summary.positionsChanged+' posições atualizadas.';
@@ -611,7 +575,7 @@ async function importFiles(files){
 }
 async function refreshAllQuotes(auto=false,symbols=null){
  if(!auth||U.quoteLoading)return;
- const holdings=E.portfolio(S,'family').holdings.filter(h=>!h.fixedIncome&&h.group!=='Tesouro'&&/^[A-Z][A-Z0-9]{3,11}$/.test(h.code));
+ const holdings=initialData('family').holdings.filter(h=>!h.fixedIncome&&h.group!=='Tesouro'&&/^[A-Z][A-Z0-9]{3,11}$/.test(h.code));
  let codes=[...new Set(holdings.map(h=>h.code))];
  if(symbols)codes=codes.filter(x=>symbols.includes(x));
  if(auto){
@@ -648,7 +612,7 @@ async function refreshAllQuotes(auto=false,symbols=null){
  // Compare effective asset values, not fetch timestamps or the number of successful requests.
  const valuesByAsset=state=>{
   const map=new Map();
-  for(const h of E.portfolio(state,'family').holdings){
+  for(const h of C.calculate(state,'family').holdings){
    if(h.fixedIncome||h.group==='Tesouro')continue;
    const key=h.owner+'|'+h.code;
    map.set(key,round((map.get(key)||0)+Number(h.value||0)));
@@ -721,7 +685,7 @@ function listen(){
  });
 }
 root.MoneyTrackerAppV7={
- getState:()=>S,setState:d=>{S=E.normalizeState(d);derivedCache=null;analysis=null;render();},
+ getState:()=>S,setState:d=>{C.invalidate(S);S=E.normalizeState(d);derivedCache=null;analysis=null;render();},
  loginReady:()=>{auth=true;el('mt7-auth').hidden=true;render();setTimeout(()=>refreshAllQuotes(true),900);},
  loginNeeded:()=>{auth=false;el('mt7-auth').hidden=false;},
  getUi:()=>U,notify,render,
