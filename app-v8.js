@@ -116,20 +116,18 @@ function assetRow(h,d){
 }
 function kpi(d){return '<div class="m8-kpis">'+iconStat('Patrimônio representado',money(d.total),d.holdings.length+' posições · B3 + cotações + renda fixa adicional','blue','portfolio')+iconStat('Resultado realizado',money(d.realized+d.dividends),'Vendas + proventos do período','teal','result')+iconStat('Proventos',money(d.dividends),d.payouts.length+' pagamentos','violet','income')+iconStat('Valorização apurada',d.openGain.matched?money(d.openGain.gain):'—',d.openGain.missing+' posições sem valorização','orange','flow')+'</div>';}
 function totalReconciliation(d){
- const b3=round(d.holdings.reduce((n,h)=>n+((h.origin==='position'||h.origin==='quote')?(h.origin==='quote'?Number(h.snapshotValue):Number(h.value)):0),0));
- const quotes=round(d.holdings.reduce((n,h)=>n+(h.origin==='quote'?(Number(h.value)-Number(h.snapshotValue)):0),0));
- const bank=round(d.holdings.reduce((n,h)=>n+(h.fixedIncome?Number(h.value):0),0));
- const estimated=round(d.holdings.reduce((n,h)=>n+(h.origin==='estimated'&&!h.fixedIncome?Number(h.value):0),0));
+ const {b3=0,quotes=0,bank=0,estimated=0}=d.sources||{};
  const date=U.owner==='me'?S.positionSnapshot?.date:U.owner==='spouse'?S.spousePositionSnapshot?.date:null;
  const r=(name,value,desc)=>'<div class="m8-tx"><div><b>'+escape(name)+'</b><small>'+escape(desc||'')+'</small></div><strong>'+money(value)+'</strong></div>';
- const result=box(header('Conferência dos totais',date?'Posição B3 registrada em '+E.dateBR(date):'Separação por origem dos valores')+
-   r('Posição oficial B3',b3,'Soma das posições oficiais B3; antes das cotações externas')+
-   (Math.abs(quotes)>0.005?r('Ajuste por cotações',quotes,'Últimos preços salvos, diferentes do arquivo B3'):'')+
-   (bank>0.005?r('Renda fixa fora da B3',bank,'RDB / LCI registrados manualmente, saldo nominal'):'')+
-   (estimated>0.005?r('Outros valores estimados',estimated,'Sem posição B3 confirmada'):'')+
-   r('Total exibido',d.total,'Soma das parcelas acima')+
-   (Math.abs(round(b3+quotes+bank+estimated)-d.total)>0.015?'<p class="m8-ai-error">Há divergência de arredondamento a conferir.</p>':''));
- return result;
+ const check=d.valid?
+  '<p class="m8-hint">✓ Totais, classes, titulares, receitas e resultados conferidos pelo motor central.</p>':
+  '<div class="m8-notice"><b>Conferência pendente</b><p>'+escape((d.issues||[]).map(x=>x.title+' ('+money(x.difference)+')').join(' · '))+'</p></div>';
+ return box(header('Conferência dos totais',date?'Posição B3 registrada em '+E.dateBR(date):'Fonte e atualização de cada parcela')+
+  r('Posição B3',b3,'Quantidade e valor do relatório oficial importado')+
+  (Math.abs(quotes)>.005?r('Diferença de cotações',quotes,'Mercado atual versus preço registrado pela B3'):'')+
+  (bank>.005?r('Renda fixa externa',bank,'Saldo nominal sem rendimentos estimados'):'')+
+  (estimated>.005?r('Outras posições',estimated,'Estimativas sinalizadas'):'')+
+  r('Patrimônio somado',d.total,'Soma automática de todas as parcelas')+check);
 }
 function trendPositions(){
  const owners=U.owner==='family'?['me','spouse']:[U.owner],raw=(S.positionHistory||[]).filter(x=>owners.includes(x.owner)&&x.date&&Number.isFinite(+x.total)).slice();
