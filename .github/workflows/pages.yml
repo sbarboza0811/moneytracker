@@ -27,6 +27,7 @@ jobs:
           node --check app-v8.js
           node --check cloud-v7.js
           node tests/calculation-smoke.test.js
+          node tests/auto-refresh.test.js
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload static app
