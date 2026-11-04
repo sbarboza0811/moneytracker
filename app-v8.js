@@ -579,7 +579,7 @@ function save(next){C.invalidate(S);S=E.normalizeState(next);derivedCache=null;a
 function download(filename,txt){const url=URL.createObjectURL(new Blob([txt],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);}
 async function importFiles(files){
  if(!auth)return notify('Entre na sua conta antes de importar.',true);
- if(busy||!files?.length)return;
+ if(busy||U.quoteLoading||!files?.length)return;
  busy=true;U.importMessage='Processando '+files.length+' arquivo(s)…';render();
  try{
   const r=await E.importXlsx(S,U.importOwner,files,root.MoneyTrackerExcel);
@@ -594,7 +594,7 @@ async function importFiles(files){
  finally{busy=false;render();}
 }
 async function refreshAllQuotes(auto=false,symbols=null){
- if(!auth||U.quoteLoading)return;
+ if(!auth||U.quoteLoading||busy)return;
  const holdings=initialData('family').holdings.filter(h=>!h.fixedIncome&&h.group!=='Tesouro'&&/^[A-Z][A-Z0-9]{3,11}$/.test(h.code));
  let codes=[...new Set(holdings.map(h=>h.code))];
  if(symbols)codes=codes.filter(x=>symbols.includes(x));
@@ -708,7 +708,7 @@ root.MoneyTrackerAppV7={
  getState:()=>S,setState:d=>{C.invalidate(S);S=E.normalizeState(d);derivedCache=null;analysis=null;render();},
  loginReady:()=>{auth=true;el('mt7-auth').hidden=true;render();installAutoRefresh();setTimeout(refreshWhileVisible,900);},
  loginNeeded:()=>{auth=false;el('mt7-auth').hidden=false;},
- getUi:()=>U,notify,render,
+ getUi:()=>U,isBusy:()=>busy||U.quoteLoading,notify,render,
  onSyncError:msg=>notify(msg,true),
  loginStatus:msg=>{const t=el('mt7-auth-status');if(t)t.textContent=msg||'';},
  isAuthenticated:()=>auth
