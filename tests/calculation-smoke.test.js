@@ -58,7 +58,7 @@ assert(book.checks.find(x=>x.id==='realized')?.ok,'Auditoria de vendas');
 const withRight=E.normalizeState({...s,spousePositionSnapshot:{...s.spousePositionSnapshot,
  rows:[...s.spousePositionSnapshot.rows,{code:'ALZR12',group:'Fundo de Investimento',product:'Direito ALZR12',qty:330,value:0,institution:'B3'}]}});
 const rights=C.calculate(withRight,'spouse');
-assert.equal(rights.openGain.missing,0,'Direito de subscrição com valor zero não é custo pendente');
+assert.equal(rights.openGain.missing,spouse.openGain.missing,'Direito de subscrição com valor zero não adiciona pendência de custo');
 assert(rights.checks.every(x=>x.ok),'Direito com valor zero não quebra auditorias');
 assert.equal(rights.total,spouse.total,'Direito zerado não aumenta patrimônio');
 const repriced=E.normalizeState({...withOperations,quotes:{...withOperations.quotes,DIVO11:{...withOperations.quotes.DIVO11,price:120}}});
