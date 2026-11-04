@@ -579,9 +579,13 @@ async function importFiles(files){
  busy=true;U.importMessage='Processando '+files.length+' arquivo(s)…';render();
  try{
   const r=await E.importXlsx(S,U.importOwner,files,root.MoneyTrackerExcel);
-  S=E.normalizeState(r.next);derivedCache=null;analysis=null;
-  U.importMessage=r.summary.added+' operações novas · '+r.summary.duplicates+' duplicadas ignoradas · '+r.summary.positionsChanged+' posições atualizadas.';
-  root.MoneyTrackerCloudV7?.scheduleSave(S);notify('Importação concluída. Confira a sincronização.');
+  const changed=r.summary.added>0||r.summary.positionsChanged>0;
+  if(changed){
+   S=E.normalizeState(r.next);derivedCache=null;analysis=null;
+   root.MoneyTrackerCloudV7?.scheduleSave(S);
+  }
+  U.importMessage=r.summary.added+' operações novas · '+r.summary.duplicates+' já existentes ignoradas · '+r.summary.positionsChanged+' posições atualizadas.';
+  notify(changed?'Importação concluída. As novidades foram salvas.':'Nenhuma novidade. A carteira foi preservada sem duplicar.');
  }catch(err){U.importMessage='Nenhum registro alterado. '+(err.message||err);notify(U.importMessage,true);}
  finally{busy=false;render();}
 }
