@@ -17,7 +17,7 @@ function panel(){
  if(!statusChecked&&!statusLoading){statusChecked=true;Promise.resolve().then(()=>status(true));}
  const list=messages();
  const actionButtons=examples.map((x,i)=>'<button type="button" class="m8-ai-example" data-ai-example="'+i+'">'+esc(x[0])+'</button>').join('');
- const badge=connected===true?'<span class="m8-ai-status is-ready">Gemini configurado</span>':
+ const badge=connected===true?'<span class="m8-ai-status is-ready">Chave do Gemini salva</span>':
   connected===false?'<span class="m8-ai-status is-off">Chave Gemini pendente</span>':
   '<span class="m8-ai-status">Conexão a verificar</span>';
  const info=connected===false?
@@ -27,7 +27,7 @@ function panel(){
   '<div class="m8-ai-start"><span>✦</span><b>Seu analista de investimentos com IA</b><p>Analisa a carteira real, compara ativos e responde perguntas específicas. As respostas são geradas por um modelo de IA, não por regras fixas.</p></div>';
  const waiting=running?'<div class="m8-ai-thinking" role="status"><span class="m8-ai-pulse"></span> Analisando suas posições e cotações…</div>':'';
  const errorInfo=error?'<p class="m8-ai-error" role="alert">'+esc(error)+'</p>':'';
- return '<section class="m8-panel m8-ai-panel" id="m8-ai-panel"><div class="m8-ai-header"><div><div class="m8-ai-kicker">✦ INTEGRADO AO APP</div><h2>Consultor IA</h2><p>Pergunte sobre aportes, riscos, alternativas e sua carteira atual.</p></div><div class="m8-ai-connect">'+badge+'<button type="button" class="m8-btn sub" data-ai-action="status" '+(statusLoading?'disabled':'')+'>'+(statusLoading?'Verificando…':'Conferir conexão')+'</button></div></div>'+
+ return '<section class="m8-panel m8-ai-panel" id="m8-ai-panel"><div class="m8-ai-header"><div><div class="m8-ai-kicker">✦ INTEGRADO AO APP</div><h2>Consultor IA</h2><p>Pergunte sobre aportes, riscos, alternativas e sua carteira atual.</p></div><div class="m8-ai-connect">'+badge+'<button type="button" class="m8-btn sub" data-ai-action="status" '+(statusLoading?'disabled':'')+'>'+(statusLoading?'Verificando…':'Verificar configuração')+'</button></div></div>'+
  info+history+waiting+errorInfo+
  '<div class="m8-ai-quick">'+actionButtons+'</div>'+
  '<form id="m8-ai-form" class="m8-ai-form"><label for="m8-ai-input">Pergunte à IA sobre seus investimentos</label><textarea id="m8-ai-input" rows="3" maxlength="700" placeholder="Ex.: Tenho R$ 3.000 para aportar. O que faz sentido estudar hoje na minha carteira?" '+(running?'disabled':'')+' required></textarea>'+
