@@ -504,17 +504,32 @@ async function importXlsx(state,owner,files,xlsx){
    const groups=new Set(positionByGroup.keys()),preserved=(before?.rows||[]).filter(r=>!groups.has(r.group));
    const latest=[];
    for(const [group,items] of positionByGroup){
-     const seen=new Set();
-     for(const r of items){const key=[r.group,r.code,r.institution,r.qty,r.value].join('|');if(seen.has(key))continue;seen.add(key);const row={...r};delete row._file;latest.push(row);}
+     const byPosition=new Map();
+     for(const r of items){
+       const key=[r.group,r.code,r.institution,r.maturity||'',r.indexer||''].join('|');
+       const row={...r};delete row._file;
+       const previous=byPosition.get(key);
+       if(previous){
+         if(JSON.stringify(previous)!==JSON.stringify(row))
+           throw Error('Há relatórios de posição diferentes para '+r.code+'. Importe somente o relatório de posição mais recente.');
+         continue;
+       }
+       byPosition.set(key,row);
+     }
+     latest.push(...byPosition.values());
    }
    const rows=preserved.concat(latest);
-   const total=Math.round(rows.reduce((n,r)=>n+(number(r.value)||0),0)*100)/100;
-   const date=isoNow(),source=input.map(f=>f.name).join(' + ');
-   next[field]={date,rows,total,source,importedAt:new Date().toISOString(),groups:[...groups]};
-   positionsChanged=latest.length;
-   next.positionHistory=next.positionHistory.filter(r=>!(r.owner===o&&r.date===date)).concat([{date,owner:o,total,source,sourceType:'import-date'}]);
+   const signature=items=>JSON.stringify(items.map(r=>[r.group,r.code,r.institution,r.maturity||'',r.indexer||'',r.qty,r.value,r.price,r.available,r.applied]).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))));
+   // A reimport of an unchanged B3 position does not change holdings or add a historical point.
+   if(signature(before?.rows||[])!==signature(rows)){
+     const total=Math.round(rows.reduce((n,r)=>n+(number(r.value)||0),0)*100)/100;
+     const date=isoNow(),source=input.map(f=>f.name).join(' + ');
+     next[field]={date,rows,total,source,importedAt:new Date().toISOString(),groups:[...groups]};
+     positionsChanged=latest.length;
+     next.positionHistory=next.positionHistory.filter(r=>!(r.owner===o&&r.date===date)).concat([{date,owner:o,total,source,sourceType:'import-date'}]);
+   }
  }
- for(const f of filesStats)next.sources[(o==='spouse'?'Esposa · ':'Minha · ')+f.name]={
+ if(newRecords.length||positionsChanged)for(const f of filesStats)next.sources[(o==='spouse'?'Esposa · ':'Minha · ')+f.name]={
    type:f.positions?'position':'history',owner:o,accepted:f.rows,positions:f.positions,invalid:f.invalid,importedAt:new Date().toISOString()
  };
  return{next,summary:{owner:o,files:input.length,added:newRecords.length,duplicates,invalid,positionsChanged,details:filesStats}};
