@@ -14,6 +14,28 @@ async function install(){
 }
 root.MoneyTrackerInstallV7={install};
 if('serviceWorker' in navigator){
- root.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js',{scope:'./'}).catch(e=>console.warn('Atualização offline indisponível',e)));
+ let reloading=false;
+ const safeToReload=()=>!root.MoneyTrackerAppV7?.isBusy?.()&&!root.MoneyTrackerCloudV7?.hasUnsaved?.();
+ navigator.serviceWorker.addEventListener('controllerchange',()=>{
+  if(reloading)return;
+  if(!safeToReload()){
+   root.MoneyTrackerAppV7?.notify('Uma nova versão está disponível. Salve suas alterações e reabra o aplicativo.');
+   return;
+  }
+  reloading=true;
+  root.location?.reload?.();
+ });
+ async function checkUpdate(){
+  if(document.visibilityState==='hidden')return;
+  try{
+   const registration=await navigator.serviceWorker.getRegistration('./');
+   await registration?.update();
+  }catch(error){console.warn('Verificação da atualização do aplicativo falhou',error);}
+ }
+ root.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js',{scope:'./'})
+  .then(()=>checkUpdate()).catch(e=>console.warn('Atualização offline indisponível',e)));
+ root.addEventListener('focus',checkUpdate);
+ document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkUpdate();});
+ root.setInterval(checkUpdate,60*60*1000);
 }
 })(window);
