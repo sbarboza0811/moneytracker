@@ -8,7 +8,7 @@ permissions:
   pages: write
   id-token: write
 concurrency:
-  group: pages
+  group: pages-recovery-20261104-v271
   cancel-in-progress: true
 jobs:
   deploy:
