@@ -130,18 +130,19 @@ function quoteUpdateControls(){
 function assetRow(h,d){
  const b=basisFor(h,d.ledger),gain=b.verified?money(h.value-b.cost):'—';
  const priceInfo=!h.fixedIncome&&(h.origin==='quote'?(h.quoteStale?' · Últ. cot. ':' · Cot. ')+money(h.unit)+'/un.':h.snapshotPrice>0?' · B3 '+money(h.snapshotPrice)+'/un.':'');
- return '<button class="m8-asset-row" data-asset="'+escape(h.owner+'|'+h.code)+'"><span class="m8-token">'+escape(h.fixedIncome?'RF':h.code.slice(0,2))+'</span><span class="m8-asset-title"><strong>'+escape(h.code)+'</strong><small>'+escape(me(h.owner))+' · '+escape(group(h.code,h.group))+(h.fixedIncome?' · Saldo nominal':'')+priceInfo+(h.origin==='quote'&&h.quoteDate?' · pregão '+E.dateBR(h.quoteDate):'')+'</small></span><span class="m8-asset-money"><strong>'+money(h.value)+'</strong><small class="'+(b.verified?'positive':'muted')+'">'+gain+'</small></span><b>›</b></button>';
+ return '<button class="m8-asset-row" data-asset="'+escape(h.owner+'|'+h.code)+'"><span class="m8-token">'+escape(h.fixedIncome?'RF':h.code.slice(0,2))+'</span><span class="m8-asset-title"><strong>'+escape(h.code)+'</strong><small>'+escape(me(h.owner))+' · '+escape(group(h.code,h.group))+(h.fixedIncome?' · Saldo nominal':'')+priceInfo+(h.origin==='quote'&&h.quoteDate?' · pregão '+E.dateBR(h.quoteDate):'')+(h.postSnapshot?' · movimentos após posição B3':'')+'</small></span><span class="m8-asset-money"><strong>'+money(h.value)+'</strong><small class="'+(b.verified?'positive':'muted')+'">'+gain+'</small></span><b>›</b></button>';
 }
 function kpi(d){return '<div class="m8-kpis">'+iconStat('Patrimônio representado',money(d.total),d.holdings.length+' posições · B3 + cotações + renda fixa adicional','blue','portfolio')+iconStat('Resultado realizado',money(d.realized+d.dividends),'Vendas + proventos do período','teal','result')+iconStat('Proventos',money(d.dividends),d.payouts.length+' pagamentos','violet','income')+iconStat('Valorização apurada',d.openGain.matched?money(d.openGain.gain):'—',d.openGain.missing+' posições sem valorização','orange','flow')+'</div>';}
 function totalReconciliation(d){
  const {b3=0,quotes=0,bank=0,estimated=0}=d.sources||{};
  const date=U.owner==='me'?S.positionSnapshot?.date:U.owner==='spouse'?S.spousePositionSnapshot?.date:null;
+ const projected=d.holdings.some(h=>h.postSnapshot);
  const r=(name,value,desc)=>'<div class="m8-tx"><div><b>'+escape(name)+'</b><small>'+escape(desc||'')+'</small></div><strong>'+money(value)+'</strong></div>';
  const check=d.valid?
   '<p class="m8-hint">✓ Totais, classes, titulares, receitas e resultados conferidos pelo motor central.</p>':
   '<div class="m8-notice"><b>Conferência pendente</b><p>'+escape((d.issues||[]).map(x=>x.title+' ('+money(x.difference)+')').join(' · '))+'</p></div>';
  return box(header('Conferência dos totais',date?'Posição B3 registrada em '+E.dateBR(date):'Fonte e atualização de cada parcela')+
-  r('Posição B3',b3,'Quantidade e valor do relatório oficial importado')+
+  r(projected?'Posição B3 + movimentos':'Posição B3',b3,projected?'Posição de referência acrescida das liquidações posteriores; confira a posição atual':'Quantidade e valor do relatório oficial importado')+
   (Math.abs(quotes)>.005?r('Diferença de cotações',quotes,'Mercado atual versus preço registrado pela B3'):'')+
   (bank>.005?r('Renda fixa externa',bank,'Saldo nominal sem rendimentos estimados'):'')+
   (estimated>.005?r('Outras posições',estimated,'Estimativas sinalizadas'):'')+
@@ -174,15 +175,17 @@ function lineChart(points,format='money'){
 }
 function dataNotice(d){
  const old=d.holdings.filter(h=>h.origin==='quote'&&(h.quoteStale||h.quoteDate<quoteReferenceDay())).length;
+ const projected=d.holdings.filter(h=>h.postSnapshot);
  const b3=d.holdings.filter(h=>h.origin==='position'&&h.group!=='Tesouro'&&!h.fixedIncome).length;
  let notices='';
  if(old||b3)notices+='<div class="m8-notice">ℹ️ '+(old?old+' posição(ões) usam a última cotação salva, que pode estar desatualizada. ':'')+
  (b3?b3+' posição(ões) usam o último valor do relatório B3. ':'')+
  'Confira a data de referência em Cotações.</div>';
+ if(projected.length)notices+='<div class="m8-notice">'+projected.length+' ativo(s) incorporam compras ou vendas liquidadas depois da última posição B3. Quantidades projetadas com base nos movimentos da B3; para Tesouro, novos valores são inicialmente considerados pelo valor da operação, não por cotação atual. Atualize a posição B3 para confirmação.</div>';
  const owners=U.owner==='family'?['me','spouse']:[U.owner];
  const snapshots=owners.map(o=>({owner:o,date:S[o==='spouse'?'spousePositionSnapshot':'positionSnapshot']?.date})).filter(x=>x.date);
  const oldPositions=snapshots.filter(x=>x.date<E.isoNow());
- if(oldPositions.length)notices+='<div class="m8-notice">As quantidades seguem o relatório B3 de '+escape(oldPositions.map(x=>me(x.owner)+' ('+E.dateBR(x.date)+')').join(', '))+'. Cotações atualizam preços, mas não registram compras ou vendas posteriores. Importe uma posição B3 mais recente para atualizar as quantidades.</div>';
+ if(oldPositions.length)notices+='<div class="m8-notice">A posição de referência é o relatório B3 de '+escape(oldPositions.map(x=>me(x.owner)+' ('+E.dateBR(x.date)+')').join(', '))+'. Liquidações e compras de Tesouro posteriores são projetadas; outras operações podem exigir nova posição oficial para conferência.</div>';
  if(d.p.valuation==='mixed')notices+='<div class="m8-notice">A carteira mistura valores de mercado, valores históricos e saldos estimados. O patrimônio não representa necessariamente o preço de venda hoje.</div>';
  else if(d.p.valuation==='historical')notices+='<div class="m8-notice">Algumas posições usam custo histórico, não cotação de mercado.</div>';
  return notices;
