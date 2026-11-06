@@ -1,6 +1,6 @@
 (function(root){
 'use strict';
-/* MoneyTracker 3.0: interface nova; mantém motores financeiros e snapshot B3 existentes. */
+/* MoneyTracker 3.1: interface com gráficos; mantém motores financeiros e snapshot B3 existentes. */
 const E=root.MoneyTrackerEngine,C=root.MoneyTrackerCalculations;
 if(!E||!C)throw Error('Os motores financeiros não foram carregados.');
 let S=E.newState(),authenticated=false,busy=false,toastTimeout=null,lastQuoteRun=0;
@@ -163,7 +163,7 @@ function ownerCompare(){
  [['me',a],['spouse',b]].map(([o,d])=>'<button type="button" class="mt9-person" data-owner="'+o+'"><div><b>'+esc(name(o))+'</b><small>'+d.holdings.length+' posição(ões)</small></div><strong>'+money(d.total)+'</strong><div class="mt9-track"><span style="width:'+Math.max(0,Math.min(100,d.total/Math.max(1,sum)*100))+'%"></span></div></button>').join(''));
 }
 function pageHome(){
- const d=full(),v=scoped(),alloc=byClass(d),g=d.openGain,verified=g.matched>0;
+ const d=full(),v=scoped(),g=d.openGain,verified=g.matched>0;
  const currentDate=U.owner==='me'?S.positionSnapshot?.date:U.owner==='spouse'?S.spousePositionSnapshot?.date:null;
  const detail=currentDate?'Posição B3 de '+rdate(currentDate)+' + últimas cotações válidas':'Composição da posição registrada e das cotações disponíveis';
  const hero='<section class="mt9-hero"><div class="mt9-eyebrow">PATRIMÔNIO REPRESENTADO</div><div class="mt9-hero-value">'+money(d.total)+'</div><p>'+esc(detail)+'. Não é o somatório de todas as compras.</p><div class="mt9-hero-foot"><span>'+d.holdings.length+' posições</span><button type="button" data-action="refresh">↻ '+(U.quoteLoading?'Atualizando':'Atualizar preços')+'</button></div></section>';
@@ -363,7 +363,7 @@ function pageMore(){
 const TITLES={home:'Visão geral',portfolio:'Carteira',result:'Resultados',ai:'IA',more:'Mais',asset:'Detalhes do ativo',sale:'Venda',income:'Proventos',compare:'Comparação',history:'Histórico',needs:'Diagnóstico',import:'Importar B3',quotes:'Cotações'};
 function shell(html){
  const topnav=[['home','Início','⌂'],['portfolio','Carteira','▦'],['result','Resultados','↗'],['ai','IA','✦'],['more','Mais','☰']];
- return '<div class="mt9-app"><aside class="mt9-sidebar"><div class="mt9-logo"><span>↗</span><div>MoneyTracker<small>Seu patrimônio, explicado.</small></div></div><nav>'+topnav.map(x=>navButton(...x)).join('')+'</nav><div class="mt9-side-footer">Versão 3.0 · B3 + Supabase</div></aside>'+
+ return '<div class="mt9-app"><aside class="mt9-sidebar"><div class="mt9-logo"><span>↗</span><div>MoneyTracker<small>Seu patrimônio, explicado.</small></div></div><nav>'+topnav.map(x=>navButton(...x)).join('')+'</nav><div class="mt9-side-footer">Versão 3.1 · B3 + Supabase</div></aside>'+
  '<div class="mt9-main"><header class="mt9-header"><div><div class="mt9-eyebrow">MONEYTRACKER</div><h1>'+TITLES[U.page]+'</h1></div><button class="mt9-sync-button" data-action="refresh" title="Atualizar cotações" '+(U.quoteLoading?'disabled':'')+'>↻ <span>'+ (U.quoteLoading?'Atualizando':'Cotações')+'</span></button></header>'+
  '<div class="mt9-filterline"><label for="mt9-owner" class="sr-only">Titular</label><select id="mt9-owner"><option value="family" '+(U.owner==='family'?'selected':'')+'>'+esc(name('family'))+'</option><option value="me" '+(U.owner==='me'?'selected':'')+'>'+esc(name('me'))+'</option><option value="spouse" '+(U.owner==='spouse'?'selected':'')+'>'+esc(name('spouse'))+'</option></select>'+
  (['home','result','income','compare','history'].includes(U.page)?'<span class="mt9-context-period">'+(U.period==='all'?'Todo histórico':U.period==='30'?'30 dias':U.period==='90'?'90 dias':U.period==='1y'?'1 ano':U.period==='5y'?'5 anos':'Período')+'</span>':'')+
