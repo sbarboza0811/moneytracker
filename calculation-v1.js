@@ -11,14 +11,12 @@ const amount=n=>Number.isFinite(Number(n))?Number(n):0;
 const ownerName=o=>o==='spouse'?'spouse':o==='me'?'me':'family';
 const owners=o=>o==='family'?['me','spouse']:[ownerName(o)];
 function classLabel(code,raw){
- const value=String(raw||'');
- if(value==='Renda fixa')return 'Renda fixa';
- if(/tesouro/i.test(value)||/^Tesouro /i.test(code))return 'Tesouro';
- if(value==='ETF'||value==='ETFs')return 'ETFs';
- if(value==='FII'||value==='FIIs')return 'FIIs';
- if(value==='Ações / BDRs'||value==='Ações')return 'Ações';
- const kind=E.classify(code,value);
- return kind==='ETF'?'ETFs':kind==='FII'?'FIIs':kind==='Ações / BDRs'?'Ações':kind==='Tesouro'?'Tesouro':kind==='Fundos'?'Fundos':'Outros';
+ // Resolve identity from the asset code and explicit B3 metadata, never the final digits alone.
+ const kind=E.classify(code,raw);
+ return kind==='ETF'?'ETFs':kind==='FII'?'FIIs':kind==='Units'?'Units':
+  kind==='Direitos'?'Direitos':kind==='Fiagro'?'Fiagro':
+  kind==='Ações / BDRs'?'Ações':kind==='Tesouro'?'Tesouro':
+  kind==='Renda fixa'?'Renda fixa':kind==='Fundos'?'Fundos':'Outros';
 }
 function basis(holding,state,ledger,positions){
  const h=holding,code=E.codeOf(h.code);
