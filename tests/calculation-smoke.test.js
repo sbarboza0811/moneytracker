@@ -67,4 +67,18 @@ assert.equal(afterReprice.openGain.gain,300,'Reprecificação afeta lucro aberto
 assert.equal(afterReprice.realized,50,'Reprecificação não altera vendas passadas');
 assert.equal(afterReprice.dividends,30,'Reprecificação não altera proventos pagos');
 
-console.log('PASS: preços, quantidades, vendas, proventos, custo, família, classes, filtros e auditorias.');
+// The final "11" does not identify the security category.
+for(const [ticker,category] of [
+ ['AUVP11','ETF'],['IMAB11','ETF'],['BOVA11','ETF'],
+ ['TAEE11','Units'],['SAPR11','Units'],['BIDI11','Units'],
+ ['MXRF11','FII'],['BTLG11','FII'],['ALZR12','Direitos'],
+ ['ZZZZ11','Outros']
+]){
+ assert.equal(E.classify(ticker,''),category,ticker+' must have verified category');
+}
+assert.equal(E.classify('FUTR11','ETF'),'ETF','Explicit exchange category for future ETF');
+assert.equal(E.classify('FUTR11','Fundo de Investimento'),'Fundos','Generic fund title does not prove FII');
+assert.equal(C.classLabel('TAEE11',''),'Units','Units are not FIIs');
+assert.equal(C.classLabel('ALZR12','Fundo de Investimento'),'Direitos','Subscription rights are not FIIs');
+
+console.log('PASS: preços, quantidades, vendas, proventos, custo, família, classes, Units, FIIs, ETFs, filtros e auditorias.');
