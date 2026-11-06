@@ -213,7 +213,8 @@ function pageNeeds(){
 }
 function pageHistory(){
  const {from,to}=periodRange();
- const r=(S.records||[]).filter(x=>(U.owner==='family'||x.owner===U.owner)&&E.recordDate(x)>=from&&E.recordDate(x)<=to&&(U.history==='all'||x.t===U.history))
+ const r=(S.records||[]).filter(x=>(U.owner==='family'||x.owner===U.owner)&&E.recordDate(x)>=from&&E.recordDate(x)<=to&&(U.history==='all'||x.t===U.history)&&
+ !E.isSubscriptionRight(x.t==='trade'?x.v[5]:String(x.v[3]||'').split(' - ')[0],'',x.t==='mov'?x.v[3]:''))
  .map(x=>({date:E.recordDate(x),owner:x.owner,label:x.t==='trade'?x.v[5]:x.v[3],kind:x.t==='trade'?x.v[1]:x.v[2],amount:num(x.v[x.t==='trade'?8:7])}));
  const fixed=(S.fixedIncomeTransactions||[]).filter(x=>(U.owner==='family'||x.owner===U.owner)&&x.date>=from&&x.date<=to&&(U.history==='all'||U.history==='fixed'))
  .map(x=>({date:x.date,owner:x.owner,label:x.assetCode,kind:x.operation==='sell'?'Resgate':'Aplicação',amount:num(x.amount)}));
@@ -247,12 +248,12 @@ function pageQuotes(){
  '<p class="mt9-fineprint">Quando uma cotação falha, a última fonte válida é mantida e identificada pela data. Tesouro e renda fixa não recebem preços fictícios.</p>';
 }
 function pageMore(){
- const sourceCount=Object.keys(S.sources||{}).length,recordCount=(S.records||[]).length;
+ const sourceCount=Object.keys(S.sources||{}).length,recordCount=(S.records||[]).filter(r=>!E.isSubscriptionRight(r.t==='trade'?r.v[5]:String(r.v[3]||'').split(' - ')[0],'',r.t==='mov'?r.v[3]:'')).length;
  const links=[['import','⇧','Importar B3','Adicionar arquivos e atualizar posições'],['quotes','↻','Cotações','Ver fontes e atualizar preços'],['history','≡','Histórico completo','Negociações e movimentações'],['income','↓','Proventos','Dividendos e rendimentos'],['compare','⇄','Comparar carteiras','Samuel, Jessica e Família'],['needs','◉','Diagnóstico','Conferência dos dados e custos']];
  return '<div class="mt9-page-intro"><h2>Mais ferramentas</h2><p>Gestão dos dados e funcionalidades ocasionais, sem complicar o dia a dia.</p></div>'+
  panels(links.map(([id,sym,title,sub])=>'<button type="button" class="mt9-menu-item" data-nav="'+id+'"><span class="mt9-menu-icon">'+sym+'</span><span><b>'+title+'</b><small>'+sub+'</small></span><span>›</span></button>').join(''))+
  panels(heading('Conta e segurança','Seu histórico continua no Supabase autenticado')+
- row('Registros importados',String(recordCount))+
+ row('Registros exibidos',String(recordCount))+
  row('Fontes registradas',String(sourceCount))+
  '<div class="mt9-status" id="mt7-cloud-status">'+esc(root.MoneyTrackerCloudV7?.status||'Verificando sincronização…')+'</div>'+
  '<div class="mt9-button-grid">'+btn('Sincronizar','sync',true)+btn('Exportar backup','backup',true)+btn('Restaurar backup','restore',true)+btn('Alternar tema','theme',true)+btn('Sair da conta','logout',true)+'</div>'+
