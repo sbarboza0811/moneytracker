@@ -61,6 +61,29 @@ const rights=C.calculate(withRight,'spouse');
 assert.equal(rights.openGain.missing,spouse.openGain.missing,'Direito de subscrição com valor zero não adiciona pendência de custo');
 assert(rights.checks.every(x=>x.ok),'Direito com valor zero não quebra auditorias');
 assert.equal(rights.total,spouse.total,'Direito zerado não aumenta patrimônio');
+assert(!rights.holdings.some(h=>h.code==='ALZR12'),'Direitos não aparecem como posições');
+const pricedRight=E.normalizeState({...s,
+ spousePositionSnapshot:{...s.spousePositionSnapshot,rows:[...s.spousePositionSnapshot.rows,
+  {code:'ALZR12',group:'Fundo de Investimento',product:'ALZR12 - Direito de subscrição',qty:100,value:200,price:2,institution:'B3'}]},
+ quotes:{...s.quotes,ALZR12:{price:3,provider:'Yahoo Finance',marketDate:date,at:now}}
+});
+const excl=C.calculate(pricedRight,'family');
+assert.equal(excl.total,family.total,'Direitos positivos e cotações não entram no patrimônio');
+assert(!excl.holdings.some(h=>h.code==='ALZR12'),'Direitos positivos não aparecem na carteira');
+assert(!('Direitos' in excl.rollup.classes),'Categoria Direitos fora da alocação');
+assert(excl.checks.every(x=>x.ok),'Auditoria continua consistente após exclusão');
+assert.equal(E.classify('TAEE11',''),'Units','Units continuam visíveis');
+assert.equal(E.classify('BOVA11',''),'ETF','ETFs continuam visíveis');
+assert(E.isSubscriptionRight('ZZZZ12','Direito de Subscrição',''),'Metadado explicito identifica direito desconhecido');
+assert(!E.isSubscriptionRight('BOVA11','ETF',''),'Sufixo 11 não indica direito');
+const rightTrades=E.normalizeState({...s,records:[
+ {id:'right-buy',owner:'spouse',t:'trade',v:[br,'Compra','Vista','','XP','ALZR12',10,2,20]},
+ {id:'right-sell',owner:'spouse',t:'trade',v:[br,'Venda','Vista','','XP','ALZR12',10,3,30]}
+]});
+const rightResult=C.calculate(rightTrades,'spouse');
+assert.equal(rightResult.realized,0,'Venda de direito excluída do lucro');
+assert.equal(rightResult.dividends,0,'Direito excluído dos proventos');
+assert(rightResult.checks.every(x=>x.ok),'Vendas de direitos não geram divergências');
 const repriced=E.normalizeState({...withOperations,quotes:{...withOperations.quotes,DIVO11:{...withOperations.quotes.DIVO11,price:120}}});
 const afterReprice=C.calculate(repriced,'me');
 assert.equal(afterReprice.openGain.gain,300,'Reprecificação afeta lucro aberto');
