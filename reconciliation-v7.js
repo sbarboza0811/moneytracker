@@ -14,7 +14,7 @@ function getEntries(state){
  const inputs=[...(Array.isArray(r.sales)?r.sales.map(x=>({...x,owner:'spouse'})):[]),
   ...(Array.isArray(r.meSales)?r.meSales.map(x=>({...x,owner:'me'})):[])];
  return inputs.filter(x=>x&&/^\d{4}-\d{2}-\d{2}$/.test(String(x.date||''))&&
- (/^[A-Z0-9]{4,12}$/.test(String(x.code||''))||/^TESOURO (SELIC|IPCA|PREFIXADO)/i.test(String(x.code||'')))&&validStatus(x.status));
+ (/^[A-Z0-9]{4,12}$/.test(String(x.code||''))||/^TESOURO (SELIC|IPCA|PREFIXADO)/i.test(String(x.code||'')))&&validStatus(x.status)&&!E.isSubscriptionRight(x.code));
 }
 function saleKey(x){return x.owner+'|'+x.date+'|'+E.codeOf(x.code);}
 function extraOpenBasis(state,owner){
@@ -192,7 +192,7 @@ E.profitBreakdown=function(state,owner='family',period='all',today=E.isoNow()){
     (r.t==='mov'&&String(r.v[2]).toLowerCase()==='compra'&&String(r.v[0]).toLowerCase()==='credito')))
    .map(r=>({owner:r.owner||'me',code:E.codeOf(r.t==='trade'?r.v[5]:String(r.v[3]).split(' - ')[0]),
     date:E.recordDate(r),qty:E.number(r.v[r.t==='trade'?6:5]),total:E.number(r.v[r.t==='trade'?8:7]),
-    broker:String(r.v[4]||''),source:r.source||''})).filter(x=>x.date&&x.date<=today&&x.qty>0&&Number.isFinite(x.total));
+    broker:String(r.v[4]||''),source:r.source||''})).filter(x=>x.date&&x.date<=today&&x.qty>0&&Number.isFinite(x.total)&&!E.isSubscriptionRight(x.code));
  const purchasesByCode=new Map();
  for(const p of purchases){const key=p.owner+'|'+p.code;if(!purchasesByCode.has(key))purchasesByCode.set(key,[]);purchasesByCode.get(key).push(p);}
  for(const list of purchasesByCode.values())list.sort((x,y)=>y.date.localeCompare(x.date));
