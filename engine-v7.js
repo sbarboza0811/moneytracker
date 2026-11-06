@@ -8,6 +8,13 @@ const ETF=new Set(('AUVP11 IMAB11 BOVA11 BOVV11 DIVO11 PIBB11 IBOV11 WRLD11 IVVB
 const FII=new Set(('ALZR11 BCFF11 BTHF11 BTLG11 FLMA11 GGRC11 HGBS11 HGCR11 HGLG11 HGRE11 HGRU11 HSML11 IRDM11 IRIM11 KFOF11 KNCR11 KNRI11 MXRF11 TGAR11 VGHF11 VILG11 VISC11 VRTA11 XPLG11 XPML11 XPSF11').split(' '));
 const UNITS=new Set(('BIDI11 SAPR11 TAEE11').split(' '));
 const RIGHTS=new Set(('ALZR12').split(' '));
+// Only explicit issuer/B3 metadata or verified codes identify subscription rights.
+// Never infer asset class from the ticker ending (e.g. ETFs and Units ending in 11).
+function isSubscriptionRight(code,group='',product=''){
+ const c=codeOf(tidy(code).split(' - ')[0]),info=norm(group+' '+product);
+ return RIGHTS.has(c)||/(?:^|\b)DIREIT(?:O|OS) (?:DE )?(?:SUBSCRICAO|PREFERENCIA)(?:\b|$)/.test(info)||
+  norm(group)==='DIREITOS';
+}
 const LABELS={me:'Minha carteira',spouse:'Carteira da esposa',family:'Família'};
 const MONEY=new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
 const tidy=s=>String(s??'').trim();
@@ -46,6 +53,7 @@ function classify(code,group){
  if(c.startsWith('TESOURO ')||g.includes('TESOURO'))return'Tesouro';
  if(g==='RENDA FIXA')return'Renda fixa';
  // Verified instrument identity takes precedence over generic export headings.
+ if(isSubscriptionRight(c,group))return'Direitos';
  if(ETF.has(c))return'ETF';
  if(FII.has(c))return'FII';
  if(UNITS.has(c))return'Units';
@@ -103,6 +111,8 @@ function ledger(state,owner='family'){
  for(const r of state.records||[]){
   const o=ownerOf(r.owner);
   if(!selected.includes(o)||!Array.isArray(r.v))continue;
+  const rawCode=r.t==='trade'?r.v[5]:tidy(r.v[3]).split(' - ')[0];
+  if(isSubscriptionRight(rawCode,'',r.t==='mov'?r.v[3]:''))continue;
   if(r.t==='trade'){
    const d=recordDate(r),act=norm(r.v[1]);
    if(d&&['COMPRA','VENDA'].includes(act))items.push({kind:'trade',r,owner:o,date:d,priority:act==='COMPRA'?1:2});
@@ -324,7 +334,8 @@ function portfolio(state,owner='family'){
  for(const p of owners){
   const snapshot=p==='spouse'?state.spousePositionSnapshot:state.positionSnapshot;
   const fromPosition=makeSnapshotHoldings(snapshot,p);
-  const rows=[...(applyPostSnapshotMovements(state,p,snapshot,fromPosition)||makeHistoricalHoldings(led,p)),...fixedIncomeHoldings(state,p)];
+  const rows=[...(applyPostSnapshotMovements(state,p,snapshot,fromPosition)||makeHistoricalHoldings(led,p)),...fixedIncomeHoldings(state,p)]
+   .filter(h=>!isSubscriptionRight(h.code,h.groupRaw||h.group,h.product));
   rows.forEach(x=>{
    // Do not reprice Renda Fixa or unconfirmed positions.
    if(x.origin==='position'&&x.group!=='Tesouro'&&!x.fixedIncome){
@@ -370,7 +381,7 @@ function dividendRows(state,owner){
  const owners=owner==='family'?['me','spouse']:[ownerOf(owner)];
  return state.records.filter(r=>r.t==='mov'&&owners.includes(ownerOf(r.owner))&&norm(r.v[0])==='CREDITO'&&(DIVTYPES.has(norm(r.v[2]))||(norm(r.v[2])==='JUROS'&&norm(r.v[3]).startsWith('TESOURO '))))
  .map(r=>({owner:ownerOf(r.owner),date:recordDate(r),amount:number(r.v[7]),code:codeOf(tidy(r.v[3]).split(' - ')[0]),type:tidy(r.v[2])}))
- .filter(r=>r.date&&Number.isFinite(r.amount)&&r.amount>=0);
+ .filter(r=>r.date&&Number.isFinite(r.amount)&&r.amount>=0&&!isSubscriptionRight(r.code));
 }
 function gains(state,owner='family',period='all',today=isoNow()){
  const from=cutoff(period,today),port=portfolio(state,owner),led=ledger(state,owner),bonds=treasuryLedger(state,owner);
@@ -607,5 +618,5 @@ async function importXlsx(state,owner,files,xlsx){
  return{next,summary:{owner:o,files:input.length,added:newRecords.length,duplicates,invalid,positionsChanged,details:filesStats}};
 }
 root.MoneyTrackerEngine={normalizeState,newState,portfolio,ledger,treasuryLedger,gains,gaps,cutoff,periodLabel,
- parseSheet,parsePositionRows,importXlsx,dateISO,dateBR,isoNow,fmt,money,norm,number,codeOf,recordDate,fingerprint,cleanRow,rowValid,dividendRows,classify,LABELS};
+ parseSheet,parsePositionRows,importXlsx,dateISO,dateBR,isoNow,fmt,money,norm,number,codeOf,recordDate,fingerprint,cleanRow,rowValid,dividendRows,classify,isSubscriptionRight,LABELS};
 })(window);
