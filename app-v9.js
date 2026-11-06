@@ -42,6 +42,47 @@ function distribution(list,total){
   return '<button type="button" data-class="'+esc(v.key)+'" class="mt9-dist-row"><div><b>'+esc(v.key)+'</b><strong>'+percent.toFixed(1).replace('.',',')+'%</strong></div><div class="mt9-track"><span style="width:'+Math.min(100,Math.max(0,percent)).toFixed(2)+'%;background:'+colors[i%colors.length]+'"></span></div><small>'+money(v.value)+'</small></button>';
  }).join('')+'</div>';
 }
+
+/* Gráficos de posição: valores atuais, nunca retornos históricos estimados. */
+const MT9_COLORS=['#5b87ff','#24bea6','#bc8ef3','#eab564','#f78697','#62b6dc','#b6d078','#d7a8e9','#7ba7a1'];
+const compactValue=x=>new Intl.NumberFormat('pt-BR',{notation:'compact',maximumFractionDigits:1}).format(num(x));
+function allocationChart(d,title='Alocação por classe'){
+ const items=byClass(d).filter(x=>x.value>0),total=items.reduce((n,x)=>n+x.value,0);
+ if(!items.length||total<=0)return '';
+ let progress=0;
+ const slices=items.map((x,i)=>{const start=progress;progress+=100*x.value/total;return MT9_COLORS[i%MT9_COLORS.length]+' '+start.toFixed(4)+'% '+progress.toFixed(4)+'%';});
+ const ring='<div class="mt9-donut" style="background:conic-gradient('+slices.join(',')+')" aria-hidden="true"><div class="mt9-donut-hole"><b>'+money(total)+'</b><span>Patrimônio atual</span></div></div>';
+ const legend='<div class="mt9-legend">'+items.map((x,i)=>'<button type="button" class="mt9-legend-row" data-class="'+esc(x.key)+'"><i style="background:'+MT9_COLORS[i%MT9_COLORS.length]+'"></i><span>'+esc(x.key)+'</span><strong>'+(x.value/total*100).toFixed(1).replace('.',',')+'%</strong><small>'+money(x.value)+'</small></button>').join('')+'</div>';
+ return panels(heading(title,'Participação por classe · toque em uma classe para filtrar a carteira')+'<div class="mt9-chart-layout">'+ring+legend+'</div>');
+}
+function concentrationChart(holdings,total,title='Concentração por ativo'){
+ const list=holdings.filter(h=>num(h.value)>0).slice().sort((a,b)=>b.value-a.value).slice(0,7);
+ if(!list.length||total<=0)return '';
+ const biggest=list[0].value;
+ return panels(heading(title,'Barras relativas à maior posição · percentuais do patrimônio')+
+ '<div class="mt9-hbars">'+list.map(h=>'<button type="button" class="mt9-hbar-row" data-asset="'+esc(h.owner+'|'+h.code)+'"><span class="mt9-hbar-heading"><b>'+esc(h.code)+'</b><small>'+esc(name(h.owner))+' · '+(h.value/total*100).toFixed(1).replace('.',',')+'%</small></span><span class="mt9-hbar-track"><i style="width:'+(h.value/biggest*100).toFixed(2)+'%"></i></span><strong>'+money(h.value)+'</strong></button>').join('')+'</div>');
+}
+function monthLabel(k){if(k.length===4)return k;const months=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];return months[Math.max(0,Math.min(11,Number(k.slice(5,7))-1))]+'/'+k.slice(2,4);}
+function incomeMonthlyChart(payouts){
+ const map=new Map();
+ for(const p of payouts){const k=String(p.date||'').slice(0,7);if(!/^\d{4}-\d{2}$/.test(k))continue;map.set(k,(map.get(k)||0)+num(p.amount));}
+ const items=[...map].map(([date,value])=>({date,value})).filter(x=>x.value>0).sort((a,b)=>a.date.localeCompare(b.date)).slice(-9);
+ if(!items.length)return '';
+ const peak=Math.max(...items.map(x=>x.value),1);
+ return panels(heading('Proventos por mês','Meses com pagamentos registrados · toque na coluna')+
+ '<div class="mt9-columns" role="group" aria-label="Proventos mensais">'+items.map(x=>
+ '<button type="button" class="mt9-column" data-income-month="'+esc(x.date)+'" aria-label="'+esc(monthLabel(x.date)+' '+money(x.value))+'"><span class="mt9-column-value">'+compactValue(x.value)+'</span><span class="mt9-column-track"><i style="height:'+(x.value/peak*100).toFixed(2)+'%"></i></span><span class="mt9-column-label">'+esc(monthLabel(x.date))+'</span></button>').join('')+'</div>');
+}
+function incomeTopChart(payouts){
+ const sums=new Map();
+ for(const p of payouts){const code=String(p.code||'');if(code)sums.set(code,(sums.get(code)||0)+num(p.amount));}
+ const top=[...sums].map(([code,value])=>({code,value})).filter(x=>x.value>0).sort((a,b)=>b.value-a.value).slice(0,7);
+ if(!top.length)return '';
+ const max=top[0].value;
+ return panels(heading('Quem mais pagou proventos','Valores recebidos no período, por ativo')+
+ '<div class="mt9-hbars">'+top.map((x,i)=>'<button type="button" class="mt9-hbar-row" data-focus-code="'+esc(x.code)+'"><span class="mt9-hbar-heading"><b>'+esc(x.code)+'</b><small>'+String(i+1)+'º em proventos</small></span><span class="mt9-hbar-track"><i class="income" style="width:'+(x.value/max*100).toFixed(2)+'%"></i></span><strong>'+money(x.value)+'</strong></button>').join('')+'</div>');
+}
+
 function statusText(d){
  const older=d.holdings.filter(h=>h.quoteStale||h.origin==='estimated').length;
  const unverified=d.openGain?.missing||0;
