@@ -83,6 +83,57 @@ function incomeTopChart(payouts){
  '<div class="mt9-hbars">'+top.map((x,i)=>'<button type="button" class="mt9-hbar-row" data-focus-code="'+esc(x.code)+'"><span class="mt9-hbar-heading"><b>'+esc(x.code)+'</b><small>'+String(i+1)+'º em proventos</small></span><span class="mt9-hbar-track"><i class="income" style="width:'+(x.value/max*100).toFixed(2)+'%"></i></span><strong>'+money(x.value)+'</strong></button>').join('')+'</div>');
 }
 
+
+function splitResultChart(points){
+ const last=points.filter(x=>Math.abs(x.sales)+Math.abs(x.dividends)>.005).slice(-8);
+ if(!last.length)return '';
+ const max=Math.max(1,...last.map(x=>Math.max(Math.abs(x.sales),x.dividends)));
+ return panels(heading('Vendas x proventos','Resultado bruto de vendas conciliadas e pagamentos, por período')+
+ '<div class="mt9-chart-key"><span><i class="sales"></i> Vendas</span><span><i class="income"></i> Proventos</span><span><i class="loss"></i> Prejuízo</span></div>'+
+ '<div class="mt9-paired">'+last.map(x=>'<button type="button" class="mt9-paired-row" data-month="'+esc(x.date)+'"><span class="mt9-paired-label">'+esc(monthLabel(x.date))+'</span><span class="mt9-paired-tracks"><i class="'+(x.sales<0?'loss':'sales')+'" style="width:'+(Math.abs(x.sales)/max*100).toFixed(2)+'%" title="Vendas: '+esc(money(x.sales))+'"></i><i class="income" style="width:'+(x.dividends/max*100).toFixed(2)+'%" title="Proventos: '+esc(money(x.dividends))+'"></i></span><strong>'+money(x.sales+x.dividends)+'</strong></button>').join('')+'</div>');
+}
+function cumulativeResultChart(points){
+ const last=points.filter(x=>Math.abs(x.sales)+Math.abs(x.dividends)>.005).slice(-18);
+ if(last.length<2)return '';
+ let acc=0;
+ const series=last.map(x=>({date:x.date,value:acc=round(acc+x.sales+x.dividends)}));
+ const low=Math.min(0,...series.map(x=>x.value)),high=Math.max(0,...series.map(x=>x.value)),span=Math.max(1,high-low);
+ const left=26,right=650,top=18,bottom=185;
+ const dots=series.map((x,i)=>({date:x.date,value:x.value,x:left+(right-left)*i/(series.length-1),y:bottom-(x.value-low)/span*(bottom-top)}));
+ const line=dots.map(x=>x.x.toFixed(1)+','+x.y.toFixed(1)).join(' ');
+ const zero=(bottom-(0-low)/span*(bottom-top)).toFixed(1);
+ const grid=[0,.5,1].map(v=>{const y=(top+(bottom-top)*v).toFixed(1);return '<line x1="'+left+'" x2="'+right+'" y1="'+y+'" y2="'+y+'" stroke="var(--mt9-border)" stroke-dasharray="4 5"/>';}).join('');
+ const circles=dots.map(x=>'<circle class="mt9-line-dot" data-month="'+esc(x.date)+'" tabindex="0" role="button" aria-label="'+esc(monthLabel(x.date)+' acumulado '+money(x.value))+'" cx="'+x.x.toFixed(1)+'" cy="'+x.y.toFixed(1)+'" r="6"><title>'+esc(monthLabel(x.date)+' · '+money(x.value))+'</title></circle>').join('');
+ return panels(heading('Resultado realizado acumulado','Vendas conciliadas + proventos; não representa evolução patrimonial')+
+ '<div class="mt9-line-summary"><span>Primeiro lançamento: '+esc(monthLabel(series[0].date))+'</span><strong class="'+(acc<0?'negative':'positive')+'">'+money(acc)+'</strong></div>'+
+ '<svg class="mt9-line-chart" viewBox="0 0 680 215" role="group" aria-label="Resultado acumulado por período, '+esc(money(acc))+'"><title>Resultado realizado acumulado</title>'+grid+
+ '<line x1="'+left+'" x2="'+right+'" y1="'+zero+'" y2="'+zero+'" stroke="var(--mt9-muted)" stroke-width="1"/>'+
+ '<polyline points="'+line+'" fill="none" stroke="var(--mt9-accent)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>'+circles+'</svg>'+
+ '<div class="mt9-line-labels"><span>'+esc(monthLabel(series[0].date))+'</span><span>'+esc(monthLabel(series[series.length-1].date))+'</span></div>'+
+ '<p class="mt9-fineprint">Somente períodos com lançamentos aparecem no eixo; toque em um ponto para consultar as operações.</p>');
+}
+function ownerClassChart(a,b){
+ const listA=byClass(a),listB=byClass(b),mapA=new Map(listA.map(x=>[x.key,x.value])),mapB=new Map(listB.map(x=>[x.key,x.value]));
+ const classes=[...new Set([...mapA.keys(),...mapB.keys()])].sort((x,y)=>(num(mapA.get(y))+num(mapB.get(y)))-(num(mapA.get(x))+num(mapB.get(x)))).slice(0,8);
+ if(!classes.length)return '';
+ return panels(heading('Comparativo por classe','Participação percentual no patrimônio de cada titular')+
+ '<div class="mt9-chart-key"><span><i class="sales"></i> '+esc(name('me'))+'</span><span><i class="income"></i> '+esc(name('spouse'))+'</span></div>'+
+ '<div class="mt9-compare-classes">'+classes.map(k=>{
+ const av=num(mapA.get(k)),bv=num(mapB.get(k)),pa=a.total>0?100*av/a.total:0,pb=b.total>0?100*bv/b.total:0;
+ return '<button type="button" class="mt9-compare-class" data-class="'+esc(k)+'"><b>'+esc(k)+'</b><span class="mt9-compare-bars"><i class="sales" style="width:'+pa.toFixed(2)+'%"></i><i class="income" style="width:'+pb.toFixed(2)+'%"></i></span><small>'+pa.toFixed(1).replace('.',',')+'% / '+pb.toFixed(1).replace('.',',')+'%</small></button>';
+ }).join('')+'</div>');
+}
+function assetValueChart(h){
+ const calc=h.calculation||{},value=num(h.value),cost=num(calc.cost);
+ if(!calc.verified||!(cost>0)||!(value>=0))return '';
+ const peak=Math.max(cost,value,1),pct=(value-cost)/cost*100;
+ return panels(heading('Preço de mercado x custo','Apenas custo comprovado, sem estimativa fiscal')+
+ '<div class="mt9-value-compare">'+
+ [['Custo de aquisição',cost,'sales'],['Valor atual',value,value>=cost?'income':'loss']].map(x=>
+ '<div class="mt9-value-row"><span>'+x[0]+'</span><span class="mt9-hbar-track"><i class="'+x[2]+'" style="width:'+(x[1]/peak*100).toFixed(2)+'%"></i></span><b>'+money(x[1])+'</b></div>').join('')+
+ '</div><p class="mt9-fineprint">Diferença não realizada: '+money(value-cost)+' ('+pct.toFixed(1).replace('.',',')+'%).</p>');
+}
+
 function statusText(d){
  const older=d.holdings.filter(h=>h.quoteStale||h.origin==='estimated').length;
  const unverified=d.openGain?.missing||0;
