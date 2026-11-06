@@ -173,10 +173,11 @@ function pageHome(){
  metric('Proventos · período',money(v.dividends),v.payouts.length+' pagamentos')+
  metric('Custo conciliado',verified?money(g.cost):'Não disponível','Apenas posições com custo confirmado')+
  '</div>';
- const dist=alloc.length?panels(heading('Onde seu dinheiro está','Participação atual por classe de ativo','<button class="mt9-textbutton" data-nav="portfolio">Detalhar ›</button>')+distribution(alloc,d.total)):'';
- const tops=d.holdings.slice().sort((a,b)=>b.value-a.value).slice(0,5);
+ const dist=allocationChart(d,'Onde seu dinheiro está');
+ const tops=d.holdings;
  return hero+periodChips()+dataNotices(d)+performance+dist+
- (tops.length?panels(heading('Maiores posições','Toque para ver custo, preço e operações')+tops.map(assetLine).join('')):'')+
+ (tops.length?concentrationChart(tops,d.total,'Maiores posições'):'')+
+ (v.payouts.length?incomeMonthlyChart(v.payouts):'')+
  (U.owner==='family'?ownerCompare():'')+
  (v.excluded||g.missing?'<button type="button" class="mt9-alertlink" data-nav="needs"><span>◉</span><div><strong>Dados para conferir</strong><small>'+v.excluded+' vendas sem custo apurado · '+g.missing+' posições sem valorização completa</small></div><span>›</span></button>':'')+
  sectionLinks();
@@ -198,7 +199,8 @@ function pagePortfolio(){
  panels('<div class="mt9-formbar"><input id="mt9-search" type="search" placeholder="Buscar código, ativo ou classe" value="'+esc(U.search)+'" aria-label="Pesquisar investimentos">'+classSelect(base.holdings)+'<select id="mt9-sort" aria-label="Ordenar carteira"><option value="value" '+(U.sort==='value'?'selected':'')+'>Maior valor</option><option value="gain" '+(U.sort==='gain'?'selected':'')+'>Maior lucro apurado</option><option value="name" '+(U.sort==='name'?'selected':'')+'>Código A–Z</option></select></div>'+
  (holdings.length?holdings.slice(0,U.limit).map(assetLine).join(''):empty('Nenhum ativo encontrado','Altere os filtros ou importe a posição B3.'))+
  (holdings.length>U.limit?'<button class="mt9-widebtn" data-action="more">Exibir mais '+(holdings.length-U.limit)+'</button>':'') )+
- (base.holdings.length?panels(heading('Distribuição da carteira','Valores da posição atual, não rendimentos')+distribution(byClass(base),base.total)):'')+
+ (base.holdings.length?concentrationChart(d.holdings,d.total):'')+
+ (base.holdings.length?allocationChart(base,'Distribuição da carteira'):'')+
  dataNotices(d);
 }
 function resultSeries(sales,payouts){
@@ -221,7 +223,8 @@ function resultBars(points){
 }
 function periodChips(){
  return '<div class="mt9-periods">'+[['30','30d'],['90','90d'],['1y','1 ano'],['5y','5 anos'],['all','Tudo']].map(([value,label])=>
- '<button type="button" data-period="'+value+'" aria-pressed="'+(U.period===value)+'" class="'+(U.period===value?'selected':'')+'">'+label+'</button>').join('')+'</div>';
+ '<button type="button" data-period="'+value+'" aria-pressed="'+(U.period===value)+'" class="'+(U.period===value?'selected':'')+'">'+label+'</button>').join('')+
+ (U.period==='custom'?'<span class="mt9-custom-period">'+esc(rdate(U.from)+' – '+rdate(U.to))+'</span>':'')+'</div>';
 }
 function saleLine(s){
  const known=s.recognized&&Number.isFinite(Number(s.profit));
@@ -234,7 +237,7 @@ function pageResult(){
  periodChips()+
  '<div class="mt9-feature-total"><span>Resultado realizado · '+rdate(scope.from)+' a '+rdate(scope.to)+'</span><strong class="'+(net<0?'negative':'positive')+'">'+money(net)+'</strong><small>'+d.excluded+' venda(s) não entram no resultado por falta de custo confirmado.</small></div>'+
  '<div class="mt9-mini-summary">'+metric('Vendas conciliadas',money(d.realized),'Lucro ou prejuízo bruto')+metric('Proventos recebidos',money(d.dividends),d.payouts.length+' eventos')+'</div>'+
- (series.length?resultBars(series):'')+
+ (series.length?resultBars(series)+splitResultChart(series)+cumulativeResultChart(series):'')+
  panels(heading('Operações que formam o resultado',d.sales.length+' vendas encontradas no intervalo')+
  (d.sales.length?d.sales.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,U.limit).map(saleLine).join(''):empty('Sem vendas neste intervalo','Experimente outro período.'))+
  (d.sales.length>U.limit?'<button class="mt9-widebtn" data-action="more">Carregar mais operações</button>':''))+
@@ -258,7 +261,7 @@ function pageAsset(){
  metric('Custo de aquisição',g.verified?money(g.cost):'Não comprovado',g.reason||'Não usar preço de mercado como custo')+
  metric('Valorização',g.verified?money(g.openGain):'Não apurada',g.verified?'Ganho em aberto, bruto':'Falta custo validado',g.openGain<0?'negative':'positive')+
  metric('Quantidade',qty(h.qty),h.institution||'')+'</div>'+
- panels(heading('Histórico deste ativo',records.length+' registros recentes')+
+ assetValueChart(h)+panels(heading('Histórico deste ativo',records.length+' registros recentes')+
  (records.length?records.map(r=>row(r.t==='trade'?r.v[1]:r.v[2],money(r.v[r.t==='trade'?8:7]),rdate(E.recordDate(r))+' · '+(r.source||'B3'))).join(''):empty('Nenhuma movimentação vinculada','Posição pode ter sido importada de um relatório de custódia.')))+
  (!h.fixedIncome&&h.group!=='Tesouro'?'<button class="mt9-widebtn" data-quote="'+esc(h.code)+'">↻ Atualizar cotação deste ativo</button>':'');
 }
@@ -277,6 +280,7 @@ function pageIncome(){
  const d=scoped();
  return '<button class="mt9-back" data-nav="more">‹ Voltar</button><div class="mt9-page-intro"><h2>Proventos</h2><p>Dividendos, rendimentos e juros efetivamente registrados.</p></div>'+
  periodChips()+'<div class="mt9-feature-total"><span>Total recebido no período</span><strong>'+money(d.dividends)+'</strong><small>'+d.payouts.length+' pagamento(s)</small></div>'+
+ incomeMonthlyChart(d.payouts)+incomeTopChart(d.payouts)+
  panels(heading('Pagamentos','Detalhamento por data')+
  (d.payouts.length?d.payouts.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,U.limit).map(p=>row(p.code,money(p.amount),rdate(p.date)+' · '+name(p.owner)+' · '+(p.type||''))).join(''):empty('Sem proventos','Não há pagamentos neste período.'))+
  (d.payouts.length>U.limit?'<button class="mt9-widebtn" data-action="more">Carregar mais</button>':''));
@@ -291,7 +295,8 @@ function pageCompare(){
  panels(heading('Resultado realizado no período','Vendas conciliadas + proventos, sem valorização em aberto')+
  row(name('me'),money(av.realized+av.dividends),'Vendas '+money(av.realized)+' · proventos '+money(av.dividends))+
  row(name('spouse'),money(bv.realized+bv.dividends),'Vendas '+money(bv.realized)+' · proventos '+money(bv.dividends))+
- row('Família',money(av.realized+av.dividends+bv.realized+bv.dividends)));
+ row('Família',money(av.realized+av.dividends+bv.realized+bv.dividends)))+
+ ownerClassChart(a,b);
 }
 function pageNeeds(){
  const issues=E.gaps(S,U.owner)||[],d=scoped(),g=full().openGain;
