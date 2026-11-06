@@ -83,7 +83,7 @@ function pageHome(){
  '</div>';
  const dist=alloc.length?panels(heading('Onde seu dinheiro está','Participação atual por classe de ativo','<button class="mt9-textbutton" data-nav="portfolio">Detalhar ›</button>')+distribution(alloc,d.total)):'';
  const tops=d.holdings.slice().sort((a,b)=>b.value-a.value).slice(0,5);
- return hero+dataNotices(d)+performance+dist+
+ return hero+periodChips()+dataNotices(d)+performance+dist+
  (tops.length?panels(heading('Maiores posições','Toque para ver custo, preço e operações')+tops.map(assetLine).join('')):'')+
  (U.owner==='family'?ownerCompare():'')+
  (v.excluded||g.missing?'<button type="button" class="mt9-alertlink" data-nav="needs"><span>◉</span><div><strong>Dados para conferir</strong><small>'+v.excluded+' vendas sem custo apurado · '+g.missing+' posições sem valorização completa</small></div><span>›</span></button>':'')+
@@ -242,7 +242,7 @@ function pageQuotes(){
  '<button class="mt9-widebtn" data-action="refresh" '+(U.quoteLoading?'disabled':'')+'>↻ '+(U.quoteLoading?'Atualizando…':'Atualizar todas as cotações')+'</button>'+
  (U.quoteProgress?'<p class="mt9-fineprint" id="mt9-progress">'+esc(U.quoteProgress)+'</p>':'')+
  (U.quoteErrors.length?'<div class="mt9-softwarning">'+U.quoteErrors.length+' ativos sem cotação nova. Valor anterior preservado.</div>':'')+
- (holdings.length?holdings.slice(0,U.limit).map(h=>'<div class="mt9-quote-row"><div><b>'+esc(h.code)+'</b><small>'+esc(name(h.owner))+' · '+qty(h.qty)+' un. · '+esc(h.origin==='quote'?(h.quoteStale?'Cotação salva antiga':'Cotação salva'):'Posição B3')+' '+rdate(h.quoteDate||h.date)+'</small></div><strong>'+money(h.value)+'</strong><button data-quote="'+esc(h.code)+'" aria-label="Atualizar '+esc(h.code)+'">↻</button></div>').join(''):empty('Sem posições para cotar','Importe uma posição B3.'))+
+ (holdings.length?holdings.slice(0,U.limit).map(h=>'<div class="mt9-quote-row"><div><b>'+esc(h.code)+'</b><small>'+esc(name(h.owner))+' · '+qty(h.qty)+' un. · '+money(h.origin==='quote'?h.unit:h.snapshotPrice||h.unit||0)+'/un. · '+esc(h.origin==='quote'?(h.quoteStale?'Cotação salva antiga':'Cotação salva'):'Posição B3')+' '+rdate(h.quoteDate||h.date)+'</small></div><strong>'+money(h.value)+'</strong><button data-quote="'+esc(h.code)+'" aria-label="Atualizar '+esc(h.code)+'">↻</button></div>').join(''):empty('Sem posições para cotar','Importe uma posição B3.'))+
  (holdings.length>U.limit?'<button class="mt9-widebtn" data-action="more">Carregar mais</button>':'') )+
  '<p class="mt9-fineprint">Quando uma cotação falha, a última fonte válida é mantida e identificada pela data. Tesouro e renda fixa não recebem preços fictícios.</p>';
 }
@@ -256,7 +256,10 @@ function pageMore(){
  row('Fontes registradas',String(sourceCount))+
  '<div class="mt9-status" id="mt7-cloud-status">'+esc(root.MoneyTrackerCloudV7?.status||'Verificando sincronização…')+'</div>'+
  '<div class="mt9-button-grid">'+btn('Sincronizar','sync',true)+btn('Exportar backup','backup',true)+btn('Restaurar backup','restore',true)+btn('Alternar tema','theme',true)+btn('Sair da conta','logout',true)+'</div>'+
- '<input type="file" id="mt9-restore-file" accept=".json,application/json" hidden>');
+ '<input type="file" id="mt9-restore-file" accept=".json,application/json" hidden>')+
+ panels(heading('Nomes exibidos','Ajuste os nomes sem alterar a titularidade dos lançamentos')+
+ ['me','spouse','family'].map(o=>'<label class="mt9-field">'+esc(o==='me'?'Primeira carteira':o==='spouse'?'Segunda carteira':'Visão conjunta')+'<input class="mt9-name-input" id="mt9-name-'+o+'" maxlength="32" value="'+esc(name(o))+'"></label>').join('')+
+ '<button class="mt9-widebtn" data-action="save-names">Salvar nomes</button>');
 }
 const TITLES={home:'Visão geral',portfolio:'Carteira',result:'Resultados',ai:'IA',more:'Mais',asset:'Detalhes do ativo',sale:'Venda',income:'Proventos',compare:'Comparação',history:'Histórico',needs:'Diagnóstico',import:'Importar B3',quotes:'Cotações'};
 function shell(html){
@@ -371,6 +374,11 @@ function listeners(){
   if(action==='restore')el('mt9-restore-file')?.click();
   if(action==='logout')root.MoneyTrackerCloudV7?.logout();
   if(action==='theme')theme();
+  if(action==='save-names'){
+   const next={...S.displayNames};
+   for(const o of ['me','spouse','family'])next[o]=String(el('mt9-name-'+o)?.value||name(o)).trim().slice(0,32)||name(o);
+   save({...S,displayNames:next});toast('Nomes atualizados.');
+  }
  });
  document.addEventListener('change',async ev=>{
   const t=ev.target;
