@@ -279,7 +279,7 @@ function render(){
   target.innerHTML=shell(panels(empty('Não foi possível exibir esta tela',e.message||'Erro inesperado.')+'<button data-nav="home" class="mt9-widebtn">Voltar ao início</button>'));
  }
 }
-function go(page){U.page=page;U.limit=45;U.search='';if(page==='import'&&U.owner!=='family')U.importOwner=U.owner;root.scrollTo?.(0,0);render();}
+function go(page){if(!['portfolio','asset'].includes(page))U.classe='all';U.page=page;U.limit=45;U.search='';if(page==='import'&&U.owner!=='family')U.importOwner=U.owner;root.scrollTo?.(0,0);render();}
 function toast(msg,error=false){
  const box=el('mt7-toasts');if(!box)return;
  box.innerHTML='<div class="mt9-toast '+(error?'error':'')+'" role="status">'+esc(msg)+'</div>';
