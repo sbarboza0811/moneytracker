@@ -45,6 +45,46 @@ for(const p of ['30','90','1y','5y','all']){
  U.period=p;A.render();
  assert(!box.innerHTML.includes('Não foi possível exibir esta tela'),'Period works: '+p);
 }
+
+// Graphs must be driven by recognized transactions, not invented wealth history.
+const previous=new Date(iso+'T12:00:00Z');previous.setUTCMonth(previous.getUTCMonth()-1);
+const previousISO=previous.toISOString().slice(0,10);
+const rich=E.normalizeState({...state,records:[
+ {id:'divo-acquisition',owner:'me',t:'trade',v:[E.dateBR(previousISO),'Compra','Vista','','XP','DIVO11',10,80,800]},
+ {id:'closed-buy',owner:'me',t:'trade',v:[E.dateBR(previousISO),'Compra','Vista','','XP','ABCD3',2,10,20]},
+ {id:'closed-sale',owner:'me',t:'trade',v:[E.dateBR(previousISO),'Venda','Vista','','XP','ABCD3',2,15,30]},
+ {id:'paid-prev',owner:'me',t:'mov',v:['Credito',E.dateBR(previousISO),'Rendimento','DIVO11 - ETF','XP',10,2,20]},
+ {id:'paid-now',owner:'me',t:'mov',v:['Credito',E.dateBR(iso),'Rendimento','DIVO11 - ETF','XP',10,3,30]}
+]});
+A.setState(rich);U.owner='me';U.period='all';U.classe='all';
+U.page='home';A.render();
+assert(box.innerHTML.includes('mt9-donut'),'Home allocation donut renders');
+assert(box.innerHTML.includes('mt9-hbar-row'),'Home concentration chart renders');
+assert(box.innerHTML.includes('mt9-column'),'Home shows actual monthly income');
+assert(!box.innerHTML.includes('Evolução do patrimônio'),'No unsupported historical wealth chart');
+U.page='portfolio';A.render();
+assert(box.innerHTML.includes('mt9-donut'),'Portfolio allocation chart renders');
+assert(box.innerHTML.includes('mt9-hbar-row'),'Portfolio asset bars render');
+U.page='result';A.render();
+assert(box.innerHTML.includes('mt9-paired-row'),'Paired sales and payout bars render');
+assert(box.innerHTML.includes('mt9-line-chart'),'Realized result line renders on two data points');
+assert(box.innerHTML.includes('Resultado realizado acumulado'),'Line distinguishes realized from unrealized');
+U.page='income';A.render();
+assert(box.innerHTML.includes('mt9-column'),'Income months chart renders');
+assert(box.innerHTML.includes('Quem mais pagou proventos'),'Income contributor ranking renders');
+U.page='compare';A.render();
+assert(box.innerHTML.includes('mt9-compare-class'),'Owner class comparison renders');
+U.asset='me|DIVO11';U.page='asset';A.render();
+assert(box.innerHTML.includes('mt9-value-row'),'Verified asset cost chart renders');
+handlers.click[0]({target:{closest:()=>({dataset:{incomeMonth:previousISO.slice(0,7)}})}});
+assert.equal(U.page,'income','Monthly income chart drills into proventos');
+assert.equal(U.period,'custom','Chart selects exact month filter');
+assert.equal(U.from,previousISO.slice(0,7)+'-01','Exact month from date is correct');
+assert(box.innerHTML.includes('mt9-custom-period'),'Custom chart interval stays visible');
+handlers.click[0]({target:{closest:()=>({dataset:{focusCode:'DIVO11'}})}});
+assert.equal(U.page,'portfolio','Income ranking opens portfolio');
+assert.equal(U.search,'DIVO11','Income ranking filters target asset');
+
 assert.equal(E.classify('TAEE11',''),'Units');
 assert.equal(E.classify('BOVA11',''),'ETF');
 assert.equal(E.classify('MXRF11',''),'FII');
@@ -68,4 +108,4 @@ for(const pg of ['home','portfolio','result','history','quotes','needs','more'])
  assert(!box.innerHTML.includes('Direitos</option>'),'No rights class filter on '+pg);
  assert(!box.innerHTML.includes('Não foi possível exibir esta tela'),'No broken page '+pg);
 }
-console.log('PASS: 13 views, people, period filters, persistent navigation, B3 classification, sums and navigation isolation.');
+console.log('PASS: interactive visual charts, drill-downs, historical accuracy, 13 views, people, period filters, persistent navigation, B3 classification, sums and navigation isolation.');
