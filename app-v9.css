@@ -95,7 +95,7 @@ body{background:var(--mt9-bg);color:var(--mt9-text)}
 .mt9-page-intro h2{font-size:23px;letter-spacing:-.055em;margin:0 0 6px}
 .mt9-page-intro p{font-size:13px;color:var(--mt9-muted);margin:0;line-height:1.6;max-width:740px}
 .mt9-formbar{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
-.mt9-formbar input,.mt9-formbar select,.mt9-field select{border:1px solid var(--mt9-border);background:var(--mt9-bg);color:var(--mt9-text);border-radius:11px;padding:12px;font-size:13px;min-height:45px;min-width:0}
+.mt9-formbar input,.mt9-formbar select,.mt9-field select,.mt9-name-input{border:1px solid var(--mt9-border);background:var(--mt9-bg);color:var(--mt9-text);border-radius:11px;padding:12px;font-size:13px;min-height:45px;min-width:0}
 .mt9-formbar input{flex:1 1 200px}
 .mt9-formbar select{flex:0 1 auto}
 .mt9-feature-total{border:1px solid var(--mt9-border);border-radius:18px;background:var(--mt9-surface);padding:24px;display:grid;gap:11px}
