@@ -2,7 +2,12 @@
 'use strict';
 const NHEAD=['Data do Negócio','Tipo de Movimentação','Mercado','Prazo/Vencimento','Instituição','Código de Negociação','Quantidade','Preço','Valor'];
 const MHEAD=['Entrada/Saída','Data','Movimentação','Produto','Instituição','Quantidade','Preço unitário','Valor da Operação'];
-const ETF=new Set(('BOVA11 BOVV11 DIVO11 PIBB11 IBOV11 WRLD11 IVVB11 BEST11 NASD11 TECK11 CHIP11 GOLD11 SPXI11 ACWI11 TECK11 LFTS11 HASH11 BITH11').split(' '));
+// Curated security identities, backed by B3/issuer classification; a "11" suffix alone is never a fund type.
+// New or unknown tickers stay in a broad/unknown category until identified from reliable metadata.
+const ETF=new Set(('AUVP11 IMAB11 BOVA11 BOVV11 DIVO11 PIBB11 IBOV11 WRLD11 IVVB11 BEST11 NASD11 TECK11 CHIP11 GOLD11 SPXI11 ACWI11 LFTS11 HASH11 BITH11').split(' '));
+const FII=new Set(('ALZR11 BCFF11 BTHF11 BTLG11 FLMA11 GGRC11 HGBS11 HGCR11 HGLG11 HGRE11 HGRU11 HSML11 IRDM11 IRIM11 KFOF11 KNCR11 KNRI11 MXRF11 TGAR11 VGHF11 VILG11 VISC11 VRTA11 XPLG11 XPML11 XPSF11').split(' '));
+const UNITS=new Set(('BIDI11 SAPR11 TAEE11').split(' '));
+const RIGHTS=new Set(('ALZR12').split(' '));
 const LABELS={me:'Minha carteira',spouse:'Carteira da esposa',family:'Família'};
 const MONEY=new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
 const tidy=s=>String(s??'').trim();
@@ -38,11 +43,22 @@ const periodLabel={30:'30 dias',90:'90 dias','1y':'1 ano','5y':'5 anos',all:'Tod
 const codeOf=raw=>norm(raw).replace(/^(.*\d)F$/,'$1');
 function classify(code,group){
  const c=codeOf(code),g=norm(group);
- if(g.includes('TESOURO'))return'Tesouro';
- if(g.includes('FUNDO DE INVESTIMENTO'))return'Fundos';
+ if(c.startsWith('TESOURO ')||g.includes('TESOURO'))return'Tesouro';
+ if(g==='RENDA FIXA')return'Renda fixa';
+ // Verified instrument identity takes precedence over generic export headings.
  if(ETF.has(c))return'ETF';
- if(/11$/.test(c))return'FII';
- if(/\d{1,2}$/.test(c))return'Ações / BDRs';
+ if(FII.has(c))return'FII';
+ if(UNITS.has(c))return'Units';
+ if(RIGHTS.has(c))return'Direitos';
+ if(g.includes('FIAGRO'))return'Fiagro';
+ if(g.includes('FII')||g.includes('IMOBILIARIO'))return'FII';
+ if(g==='ETF'||g==='ETFS'||g.includes('FUNDO DE INDICE'))return'ETF';
+ if(g.includes('UNIT'))return'Units';
+ if(g.includes('DIREITO DE SUBSCRICAO')||g.includes('DIREITO DE PREFERENCIA'))return'Direitos';
+ if(g.includes('FUNDO DE INVESTIMENTO'))return'Fundos';
+ // No ticker suffix proves the product type. Unknown 11s must never be FIIs by default.
+ if(/^[A-Z]{4}11$/.test(c))return'Outros';
+ if(/^[A-Z][A-Z0-9]{3,5}(?:3|4|5|6|34|35)$/.test(c))return'Ações / BDRs';
  return'Outros';
 }
 const ownerOf=x=>x==='spouse'?'spouse':'me';
