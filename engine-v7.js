@@ -7,13 +7,20 @@ const MHEAD=['Entrada/Saída','Data','Movimentação','Produto','Instituição',
 const ETF=new Set(('AUVP11 IMAB11 BOVA11 BOVV11 DIVO11 PIBB11 IBOV11 WRLD11 IVVB11 BEST11 NASD11 TECK11 CHIP11 GOLD11 SPXI11 ACWI11 LFTS11 HASH11 BITH11').split(' '));
 const FII=new Set(('ALZR11 BCFF11 BTHF11 BTLG11 FLMA11 GGRC11 HGBS11 HGCR11 HGLG11 HGRE11 HGRU11 HSML11 IRDM11 IRIM11 KFOF11 KNCR11 KNRI11 MXRF11 TGAR11 VGHF11 VILG11 VISC11 VRTA11 XPLG11 XPML11 XPSF11').split(' '));
 const UNITS=new Set(('BIDI11 SAPR11 TAEE11').split(' '));
-const RIGHTS=new Set(('ALZR12').split(' '));
+// Verified using explicit subscription-rights/receipt events in the owner's B3 history.
+// Do not generalize based on ticker endings: e.g. ETFs and Units also end in 11.
+const RIGHTS=new Set(('ALZR12 BCFF12 BCFF13 BIDI12 BTLG12 FLRY1 GGRC12 HGBS12 HGLG12 HGRE12 HGRU12 IRBR1 IRBR9 IRDM12 KNCR12 KNRI12 MXRF12 MXRF13 VGHF12 VISC12 XPLG12 XPML12').split(' '));
 // Only explicit issuer/B3 metadata or verified codes identify subscription rights.
 // Never infer asset class from the ticker ending (e.g. ETFs and Units ending in 11).
 function isSubscriptionRight(code,group='',product=''){
  const c=codeOf(tidy(code).split(' - ')[0]),info=norm(group+' '+product);
  return RIGHTS.has(c)||/(?:^|\b)DIREIT(?:O|OS) (?:DE )?(?:SUBSCRICAO|PREFERENCIA)(?:\b|$)/.test(info)||
-  norm(group)==='DIREITOS';
+  /\bRECIBO DE SUBSCRICAO\b/.test(info)||norm(group)==='DIREITOS';
+}
+function isSubscriptionEvent(raw){
+ const s=norm(raw);
+ return /\b(?:DIREITO|DIREITOS|RECIBO|SOLICITACAO) (?:DE )?(?:SUBSCRICAO|PREFERENCIA)\b/.test(s)||
+  /\bCESSAO DE DIREITOS\b/.test(s);
 }
 const LABELS={me:'Minha carteira',spouse:'Carteira da esposa',family:'Família'};
 const MONEY=new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
@@ -618,5 +625,5 @@ async function importXlsx(state,owner,files,xlsx){
  return{next,summary:{owner:o,files:input.length,added:newRecords.length,duplicates,invalid,positionsChanged,details:filesStats}};
 }
 root.MoneyTrackerEngine={normalizeState,newState,portfolio,ledger,treasuryLedger,gains,gaps,cutoff,periodLabel,
- parseSheet,parsePositionRows,importXlsx,dateISO,dateBR,isoNow,fmt,money,norm,number,codeOf,recordDate,fingerprint,cleanRow,rowValid,dividendRows,classify,isSubscriptionRight,LABELS};
+ parseSheet,parsePositionRows,importXlsx,dateISO,dateBR,isoNow,fmt,money,norm,number,codeOf,recordDate,fingerprint,cleanRow,rowValid,dividendRows,classify,isSubscriptionRight,isSubscriptionEvent,LABELS};
 })(window);
