@@ -72,6 +72,12 @@ assert.equal(excl.total,family.total,'Direitos positivos e cotações não entra
 assert(!excl.holdings.some(h=>h.code==='ALZR12'),'Direitos positivos não aparecem na carteira');
 assert(!('Direitos' in excl.rollup.classes),'Categoria Direitos fora da alocação');
 assert(excl.checks.every(x=>x.ok),'Auditoria continua consistente após exclusão');
+for(const code of ['BTLG12','KNCR12','XPML12','BCFF13','IRBR1']){
+ assert(E.isSubscriptionRight(code,'Fundo de Investimento','Produto sem a palavra direito'),code+' é direito/recibo B3 confirmado');
+}
+assert(E.isSubscriptionEvent('Cessão de Direitos'),'Cessão escondida mesmo sem sufixo convencional');
+assert(E.isSubscriptionEvent('Recibo de Subscrição'),'Recibo escondido');
+assert(!E.isSubscriptionEvent('Transferência - Liquidação'),'Liquidação normal preservada');
 assert.equal(E.classify('TAEE11',''),'Units','Units continuam visíveis');
 assert.equal(E.classify('BOVA11',''),'ETF','ETFs continuam visíveis');
 assert(E.isSubscriptionRight('ZZZZ12','Direito de Subscrição',''),'Metadado explicito identifica direito desconhecido');

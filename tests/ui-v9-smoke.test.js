@@ -51,16 +51,20 @@ assert.equal(E.classify('MXRF11',''),'FII');
 assert.equal(E.classify('ZZZZ11',''),'Outros');
 const hidden=E.normalizeState({...state,
  positionSnapshot:{...state.positionSnapshot,rows:[...state.positionSnapshot.rows,
-  position('ALZR12',100,200,'Fundo de Investimento')]},
+  position('ALZR12',100,200,'Fundo de Investimento'),position('BTLG12',6,50,'Fundo de Investimento')]},
  records:[
   {id:'rights-buy',t:'trade',owner:'me',v:[E.dateBR(iso),'Compra','Vista','','XP','ALZR12',10,2,20]},
-  {id:'rights-sell',t:'trade',owner:'me',v:[E.dateBR(iso),'Venda','Vista','','XP','ALZR12',10,3,30]}
+  {id:'rights-sell',t:'trade',owner:'me',v:[E.dateBR(iso),'Venda','Vista','','XP','ALZR12',10,3,30]},
+  {id:'subscription',t:'mov',owner:'me',v:['Credito',E.dateBR(iso),'Direito de Subscrição','KNCR12 - Fundo imobiliário','XP',12,'-','-']},
+  {id:'rights-transfer',t:'mov',owner:'me',v:['Credito',E.dateBR(iso),'Cessão de Direitos','BTLG12 - Fundo imobiliário','XP',6,'-','-']},
+  {id:'receipt',t:'mov',owner:'me',v:['Credito',E.dateBR(iso),'Recibo de Subscrição','BCFF13 - Fundo imobiliário','XP',2,'-','-']}
  ]});
 A.setState(hidden);
 assert.equal(C.calculate(A.getState(),'family').total,2070,'Rights excluded even when nonzero');
 for(const pg of ['home','portfolio','result','history','quotes','needs','more']){
  U.page=pg;U.owner='family';U.classe='all';U.search='';U.period='all';A.render();
- assert(!box.innerHTML.includes('ALZR12'),'No subscription right ticker on '+pg);
+ for(const code of ['ALZR12','BTLG12','KNCR12','BCFF13'])
+  assert(!box.innerHTML.includes(code),'No subscription rights/receipts '+code+' on '+pg);
  assert(!box.innerHTML.includes('Direitos</option>'),'No rights class filter on '+pg);
  assert(!box.innerHTML.includes('Não foi possível exibir esta tela'),'No broken page '+pg);
 }

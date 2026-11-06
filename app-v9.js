@@ -214,7 +214,8 @@ function pageNeeds(){
 function pageHistory(){
  const {from,to}=periodRange();
  const r=(S.records||[]).filter(x=>(U.owner==='family'||x.owner===U.owner)&&E.recordDate(x)>=from&&E.recordDate(x)<=to&&(U.history==='all'||x.t===U.history)&&
- !E.isSubscriptionRight(x.t==='trade'?x.v[5]:String(x.v[3]||'').split(' - ')[0],'',x.t==='mov'?x.v[3]:''))
+ !E.isSubscriptionRight(x.t==='trade'?x.v[5]:String(x.v[3]||'').split(' - ')[0],'',x.t==='mov'?x.v[3]:'')&&
+ !(x.t==='mov'&&E.isSubscriptionEvent(x.v[2])))
  .map(x=>({date:E.recordDate(x),owner:x.owner,label:x.t==='trade'?x.v[5]:x.v[3],kind:x.t==='trade'?x.v[1]:x.v[2],amount:num(x.v[x.t==='trade'?8:7])}));
  const fixed=(S.fixedIncomeTransactions||[]).filter(x=>(U.owner==='family'||x.owner===U.owner)&&x.date>=from&&x.date<=to&&(U.history==='all'||U.history==='fixed'))
  .map(x=>({date:x.date,owner:x.owner,label:x.assetCode,kind:x.operation==='sell'?'Resgate':'Aplicação',amount:num(x.amount)}));
