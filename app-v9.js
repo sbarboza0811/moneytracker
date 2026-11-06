@@ -453,17 +453,27 @@ function theme(){
  const meta=document.querySelector('meta[name="theme-color"]');if(meta)meta.content=next==='dark'?'#0a1120':'#f3f6fc';
  render();
 }
+
+function drillPeriod(date,page){
+ if(!/^\d{4}(?:-\d{2})?$/.test(date))return;
+ U.period='custom';U.from=date.length===4?date+'-01-01':date+'-01';
+ if(date.length===4)U.to=date+'-12-31';
+ else{const d=new Date(+date.slice(0,4),+date.slice(5,7),0);
+  U.to=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+ go(page);
+}
 function listeners(){
  document.addEventListener('click',ev=>{
-  const b=ev.target.closest('[data-nav],[data-asset],[data-sale],[data-period],[data-grain],[data-class],[data-month],[data-quote],[data-action]');
+  const b=ev.target.closest('[data-nav],[data-asset],[data-sale],[data-period],[data-grain],[data-class],[data-month],[data-income-month],[data-focus-code],[data-quote],[data-action]');
   if(!b)return;
   if(b.dataset.nav){go(b.dataset.nav);return;}
   if(b.dataset.asset){U.asset=b.dataset.asset;go('asset');return;}
+   if(b.dataset.focusCode){go('portfolio');U.search=b.dataset.focusCode;render();return;}
   if(b.dataset.sale){U.sale=b.dataset.sale;go('sale');return;}
   if(b.dataset.period){U.period=b.dataset.period;U.limit=45;remember();render();return;}
   if(b.dataset.grain){U.grain=b.dataset.grain;render();return;}
   if(b.dataset.class){U.classe=b.dataset.class;go('portfolio');return;}
-  if(b.dataset.month){const date=b.dataset.month;U.period='custom';U.from=date.length===4?date+'-01-01':date+'-01';if(date.length===4)U.to=date+'-12-31';else{const d=new Date(+date.slice(0,4),+date.slice(5,7),0);U.to=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}go('result');return;}
+  if(b.dataset.month||b.dataset.incomeMonth){drillPeriod(b.dataset.month||b.dataset.incomeMonth,b.dataset.incomeMonth?'income':'result');return;}
   if(b.dataset.quote){refresh(false,[b.dataset.quote]);return;}
   const action=b.dataset.action;
   if(action==='refresh')refresh(false);
@@ -479,6 +489,7 @@ function listeners(){
    save({...S,displayNames:next});toast('Nomes atualizados.');
   }
  });
+ document.addEventListener('keydown',ev=>{if((ev.key==='Enter'||ev.key===' ')&&ev.target.closest?.('.mt9-line-dot[data-month]')){ev.preventDefault();drillPeriod(ev.target.dataset.month,'result');}});
  document.addEventListener('change',async ev=>{
   const t=ev.target;
   if(t.id==='mt9-owner'){U.owner=t.value;U.classe='all';U.limit=45;remember();render();}
