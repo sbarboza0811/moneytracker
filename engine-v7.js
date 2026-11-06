@@ -246,13 +246,69 @@ function fixedIncomeHoldings(state,owner){
   source:x.source,date:x.date,rate:x.rate,maturity:x.maturity
  }));
 }
+
+function applyPostSnapshotMovements(state,owner,snapshot,originalRows){
+ // The B3 position is settlement-based. A trade executed before the snapshot
+ // can settle after it; use movement dates to avoid omitting or double-counting it.
+ if(!snapshot?.date||!originalRows)return originalRows;
+ const rows=originalRows.map(h=>({...h})),byCode=new Map(rows.map(h=>[norm(h.code),h]));
+ for(const r of state.records||[]){
+  if(r.t!=='mov'||ownerOf(r.owner)!==owner||!Array.isArray(r.v))continue;
+  const date=recordDate(r);
+  if(!date||date<=snapshot.date||date>isoNow())continue;
+  const action=norm(r.v[2]),direction=norm(r.v[0]),product=tidy(r.v[3]);
+  const treasury=norm(product).startsWith('TESOURO ');
+  if(!((action==='TRANSFERENCIA - LIQUIDACAO'&&!treasury)||
+       (treasury&&(action==='COMPRA'||action==='VENDA'))))continue;
+  if(treasury&&((action==='COMPRA'&&direction!=='CREDITO')||
+                (action==='VENDA'&&direction!=='DEBITO')))continue;
+  const sign=direction==='CREDITO'?1:direction==='DEBITO'?-1:0;
+  const qty=number(r.v[5]),amount=number(r.v[7]),price=number(r.v[6]);
+  if(!sign||!(qty>0)||!(amount>=0))continue;
+  const code=treasury?product:codeOf(product.split(' - ')[0]);
+  if(!code)continue;
+  let h=byCode.get(norm(code));
+  if(!h){
+   if(sign<0)continue;
+   h={owner,code,product,group:treasury?'Tesouro':classify(code,''),
+      qty:0,value:0,unit:0,origin:'estimated',institution:tidy(r.v[4]),
+      source:'Movimentacao B3 posterior a posicao',date:snapshot.date,applied:treasury?0:null};
+   rows.push(h);byCode.set(norm(code),h);
+  }
+  const oldQty=h.qty;
+  if(sign<0&&qty>oldQty+0.000001)continue; // Never invent negative holdings.
+  if(treasury){
+   if(sign>0){
+    h.value+=amount;
+    h.applied=Number.isFinite(number(h.applied))?number(h.applied)+amount:amount;
+   }else{
+    const ratio=oldQty>0?qty/oldQty:0;
+    h.value*=1-ratio;
+    if(Number.isFinite(number(h.applied)))h.applied=number(h.applied)*(1-ratio);
+   }
+  }
+  h.qty=Math.max(0,Math.round((oldQty+sign*qty)*1e8)/1e8);
+  if(!treasury){
+   const valuationPrice=Number.isFinite(number(h.snapshotPrice))&&number(h.snapshotPrice)>0
+      ?number(h.snapshotPrice):oldQty>0?h.value/oldQty:Number.isFinite(price)?price:0;
+   h.value=Math.round(h.qty*valuationPrice*100)/100;
+   h.unit=valuationPrice;
+  }else{
+   h.value=roundMoney(h.value);
+   h.unit=h.qty>0?h.value/h.qty:0;
+  }
+  h.postSnapshot=true;h.projectionDate=date;
+ }
+ return rows.filter(h=>h.qty>0.00000001);
+}
+
 function portfolio(state,owner='family'){
  const owners=owner==='family'?['me','spouse']:[ownerOf(owner)],led=ledger(state,owner);
  const byPerson={},holdings=[];
  for(const p of owners){
   const snapshot=p==='spouse'?state.spousePositionSnapshot:state.positionSnapshot;
   const fromPosition=makeSnapshotHoldings(snapshot,p);
-  const rows=[...(fromPosition||makeHistoricalHoldings(led,p)),...fixedIncomeHoldings(state,p)];
+  const rows=[...(applyPostSnapshotMovements(state,p,snapshot,fromPosition)||makeHistoricalHoldings(led,p)),...fixedIncomeHoldings(state,p)];
   rows.forEach(x=>{
    // Do not reprice Renda Fixa or unconfirmed positions.
    if(x.origin==='position'&&x.group!=='Tesouro'&&!x.fixedIncome){
